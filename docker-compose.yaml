@@ -103,6 +103,25 @@ services:
       mongodb-primary:
         condition: service_healthy
 
+  # Ensure root user exists (runs after primary is up)
+  mongodb-init-user:
+    image: mongo:7.0
+    container_name: mongo-init-user
+    restart: "no"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    volumes:
+      - ./tls-certs:/etc/mongo/ssl:ro
+      - ./scripts:/scripts:ro
+    entrypoint: ["bash", "/scripts/init-user.sh"]
+    command: ["mongodb-primary", "27017"]
+    networks:
+      - db-network
+    depends_on:
+      mongodb-primary:
+        condition: service_started
+
   # Replica Set Initialization Service
   mongodb-init:
     image: mongo:7.0
@@ -125,6 +144,8 @@ services:
         condition: service_healthy
       mongodb-secondary-2:
         condition: service_healthy
+      mongodb-init-user:
+        condition: service_completed_successfully
 
   ## Custom MongoDB Admin UI (with TLS and Replica Set support)
   mongo-admin:
@@ -157,6 +178,8 @@ services:
       mongodb-secondary-2:
         condition: service_healthy
       mongodb-init:
+        condition: service_completed_successfully
+      mongodb-init-user:
         condition: service_completed_successfully
     networks:
       - db-network

@@ -115,6 +115,8 @@ mongosh "mongodb://username:password@localhost:27017/?replicaSet=rs0&tls=true&tl
 
 **See [HA_SETUP.md](./docs/HA_SETUP.md) for complete HA setup guide, migration instructions, and troubleshooting.**
 
+**Having issues?** Check the [Troubleshooting Guide](./docs/TROUBLESHOOTING.md) for common problems and solutions.
+
 ## Stop Services
 
 ```bash
