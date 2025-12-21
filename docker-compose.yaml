@@ -1,10 +1,11 @@
 #version: '3.8'
+# High Availability MongoDB Replica Set Configuration
 
 services:
-# MongoDB instance
-  mongodb:
+  # MongoDB Primary Node
+  mongodb-primary:
     image: mongo:7.0
-    container_name: mongo
+    container_name: mongo-primary
     restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
@@ -12,10 +13,12 @@ services:
     ports:
       - "${MONGO_PORT:-27017}:27017"
     volumes:
-      - ./db_data:/data/db
+      - ./db_data_primary:/data/db
       - ./tls-certs:/etc/mongo/ssl:ro
+      - ./scripts:/scripts:ro
     command: >
       mongod
+      --replSet ${REPLICA_SET_NAME:-rs0}
       --tlsMode requireTLS
       --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
       --tlsCAFile /etc/mongo/ssl/ca.crt
@@ -23,8 +26,101 @@ services:
       --bind_ip_all
     networks:
       - db-network
+    healthcheck:
+      test: ["CMD", "bash", "/scripts/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
-  ## Custom MongoDB Admin UI (with TLS support)
+  # MongoDB Secondary Node 1
+  mongodb-secondary-1:
+    image: mongo:7.0
+    container_name: mongo-secondary-1
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    volumes:
+      - ./db_data_secondary1:/data/db
+      - ./tls-certs:/etc/mongo/ssl:ro
+      - ./scripts:/scripts:ro
+    command: >
+      mongod
+      --replSet ${REPLICA_SET_NAME:-rs0}
+      --tlsMode requireTLS
+      --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
+      --tlsCAFile /etc/mongo/ssl/ca.crt
+      --tlsAllowConnectionsWithoutCertificates
+      --bind_ip_all
+    networks:
+      - db-network
+    healthcheck:
+      test: ["CMD", "bash", "/scripts/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      mongodb-primary:
+        condition: service_healthy
+
+  # MongoDB Secondary Node 2
+  mongodb-secondary-2:
+    image: mongo:7.0
+    container_name: mongo-secondary-2
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    volumes:
+      - ./db_data_secondary2:/data/db
+      - ./tls-certs:/etc/mongo/ssl:ro
+      - ./scripts:/scripts:ro
+    command: >
+      mongod
+      --replSet ${REPLICA_SET_NAME:-rs0}
+      --tlsMode requireTLS
+      --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
+      --tlsCAFile /etc/mongo/ssl/ca.crt
+      --tlsAllowConnectionsWithoutCertificates
+      --bind_ip_all
+    networks:
+      - db-network
+    healthcheck:
+      test: ["CMD", "bash", "/scripts/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      mongodb-primary:
+        condition: service_healthy
+
+  # Replica Set Initialization Service
+  mongodb-init:
+    image: mongo:7.0
+    container_name: mongo-init
+    restart: "no"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      REPLICA_SET_NAME: ${REPLICA_SET_NAME:-rs0}
+    volumes:
+      - ./tls-certs:/etc/mongo/ssl:ro
+      - ./scripts:/scripts:ro
+    entrypoint: ["bash", "/scripts/init-replica-set.sh"]
+    networks:
+      - db-network
+    depends_on:
+      mongodb-primary:
+        condition: service_healthy
+      mongodb-secondary-1:
+        condition: service_healthy
+      mongodb-secondary-2:
+        condition: service_healthy
+
+  ## Custom MongoDB Admin UI (with TLS and Replica Set support)
   mongo-admin:
     build: ./mongo-admin
     container_name: mongo-admin
@@ -34,8 +130,9 @@ services:
     environment:
       MONGO_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
       MONGO_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
-      MONGO_HOST: mongodb
+      MONGO_HOST: mongodb-primary
       MONGO_PORT: ${MONGO_PORT:-27017}
+      MONGO_REPLICA_SET: ${REPLICA_SET_NAME:-rs0}
       MONGO_TLS: "true"
       MONGO_TLS_ALLOW_INVALID: "true"
       MONGO_TLS_CA_FILE: /etc/mongo/ssl/ca.crt
@@ -47,7 +144,14 @@ services:
     volumes:
       - ./tls-certs:/etc/mongo/ssl:ro
     depends_on:
-      - mongodb
+      mongodb-primary:
+        condition: service_healthy
+      mongodb-secondary-1:
+        condition: service_healthy
+      mongodb-secondary-2:
+        condition: service_healthy
+      mongodb-init:
+        condition: service_completed_successfully
     networks:
       - db-network
 
