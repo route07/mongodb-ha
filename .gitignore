@@ -11,6 +11,9 @@ db_data/
 
 # Export files
 *_export_*.json
+
+# Node modules (only in database-export if used)
+database-export/node_modules/
 dumps/
 
 # Environment files

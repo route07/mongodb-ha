@@ -127,25 +127,29 @@ See `mongo-admin/WEB3_AUTH.md` for detailed authentication setup.
 
 To migrate databases from an old MongoDB server to the new admin UI:
 
-### Quick Method (Using Provided Script)
+### Quick Method (Using Export Tool)
 
-**First time setup:**
+The export tool is in the `database-export/` directory. **This is optional** - only install if you need to export from other MongoDB servers.
+
 ```bash
-# Install dependencies (one time)
+# Navigate to export tool directory
+cd database-export
+
+# Install dependencies (one time, only if you need this tool)
 npm install
-```
 
-**Export from old server:**
-```bash
+# Export from old server
 # Basic (no TLS)
 node export-database.js "mongodb://user:pass@old-server:27017/dbname"
 
 # With TLS (like your new server)
-node export-database.js "mongodb://user:pass@old-server:27017/dbname?tls=true&tlsCAFile=./tls-certs/ca.crt&tlsAllowInvalidCertificates=true&authSource=admin"
+node export-database.js "mongodb://user:pass@old-server:27017/dbname?tls=true&tlsCAFile=../tls-certs/ca.crt&tlsAllowInvalidCertificates=true&authSource=admin"
 
 # This creates: dbname_export_TIMESTAMP.json
 # Then import via Admin UI at http://localhost:3000
 ```
+
+See [database-export/README.md](./database-export/README.md) for complete export tool documentation.
 
 ### Manual Methods
 

@@ -162,33 +162,36 @@ echo "Export file created: $OUTPUT_FILE"
    - Save file
 4. **Combine files** using the script above or manually create the JSON structure
 
-## Method 4: Using the Provided Export Script (Easiest!)
+## Method 4: Using the Provided Export Tool (Easiest!)
 
-A ready-to-use export script is included in this project:
+A ready-to-use export tool is included in the `database-export/` directory:
 
+**Setup:**
+```bash
+cd database-export
+npm install
+```
+
+**Usage:**
 ```bash
 # Basic usage (no TLS)
 node export-database.js "mongodb://username:password@old-server:27017/dbname"
 
 # With TLS (like your new server)
-node export-database.js "mongodb://username:password@old-server:27017/dbname?tls=true&tlsCAFile=./tls-certs/ca.crt&tlsAllowInvalidCertificates=true&authSource=admin"
+node export-database.js "mongodb://username:password@old-server:27017/dbname?tls=true&tlsCAFile=../tls-certs/ca.crt&tlsAllowInvalidCertificates=true&authSource=admin"
 
 # Specify output file
 node export-database.js "mongodb://username:password@old-server:27017/dbname" output.json
 ```
 
-**First time setup:**
-```bash
-# Install dependencies (one time)
-npm install
-```
-
-The script automatically:
+The tool automatically:
 - ✅ Connects to the MongoDB server
 - ✅ Exports all collections
 - ✅ Creates JSON in the exact format the Admin UI expects
 - ✅ Handles TLS connections
 - ✅ Shows progress and statistics
+
+See [database-export/README.md](./database-export/README.md) for complete documentation.
 
 ## Import via Admin UI
 

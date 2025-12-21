@@ -1,0 +1,20 @@
+{
+  "name": "mongo-database-export",
+  "version": "1.0.0",
+  "description": "MongoDB database export tool for Admin UI import format",
+  "main": "export-database.js",
+  "scripts": {
+    "export": "node export-database.js"
+  },
+  "dependencies": {
+    "mongodb": "^6.3.0"
+  },
+  "keywords": [
+    "mongodb",
+    "export",
+    "database",
+    "migration"
+  ],
+  "author": "",
+  "license": "MIT"
+}
