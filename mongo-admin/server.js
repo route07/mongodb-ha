@@ -4,10 +4,19 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+const { ethers } = require('ethers');
+const session = require('express-session');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.ADMIN_UI_PORT || 3000;
+
+// Web3 Auth Configuration
+const WEB3_AUTH_ENABLED = process.env.WEB3_AUTH_ENABLED === 'true';
+const ADMIN_WALLETS = (process.env.ADMIN_WALLETS || '')
+  .split(',')
+  .map(addr => addr.trim().toLowerCase())
+  .filter(addr => addr.length > 0);
 
 // Configure multer for file uploads
 const upload = multer({ 
@@ -20,11 +29,46 @@ if (!fs.existsSync('/tmp/uploads')) {
   fs.mkdirSync('/tmp/uploads', { recursive: true });
 }
 
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'mongo-admin-secret-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { 
+    secure: false, // Set to true if using HTTPS
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
 app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ extended: true, limit: '500mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Web3 Authentication Middleware
+function requireAuth(req, res, next) {
+  if (!WEB3_AUTH_ENABLED) {
+    return next();
+  }
+  
+  if (!req.session || !req.session.authenticated || !req.session.walletAddress) {
+    return res.status(401).json({ error: 'Authentication required', requiresAuth: true });
+  }
+  
+  // Verify wallet is still in admin list
+  const walletAddress = req.session.walletAddress.toLowerCase();
+  if (!ADMIN_WALLETS.includes(walletAddress)) {
+    req.session.destroy();
+    return res.status(403).json({ error: 'Access denied', requiresAuth: true });
+  }
+  
+  next();
+}
 
 // MongoDB connection with TLS
 let mongoClient = null;
@@ -111,7 +155,68 @@ async function connectToMongoDB() {
 // Initialize connection
 connectToMongoDB().catch(console.error);
 
-// Health check endpoint
+// Auth endpoints (no auth required)
+app.get('/api/auth/status', (req, res) => {
+  res.json({
+    enabled: WEB3_AUTH_ENABLED,
+    authenticated: req.session?.authenticated || false,
+    walletAddress: req.session?.walletAddress || null
+  });
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    if (!WEB3_AUTH_ENABLED) {
+      return res.json({ authenticated: true, message: 'Auth disabled' });
+    }
+    
+    const { signature, message, walletAddress } = req.body;
+    
+    if (!signature || !message || !walletAddress) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    // Verify wallet address is in admin list
+    const address = walletAddress.toLowerCase();
+    if (!ADMIN_WALLETS.includes(address)) {
+      return res.status(403).json({ error: 'Wallet address not authorized' });
+    }
+    
+    // Verify signature using ethers.js v6
+    try {
+      const recoveredAddress = ethers.verifyMessage(message, signature).toLowerCase();
+      if (recoveredAddress !== address) {
+        return res.status(401).json({ error: 'Invalid signature' });
+      }
+    } catch (err) {
+      console.error('Signature verification error:', err);
+      return res.status(401).json({ error: 'Signature verification failed: ' + err.message });
+    }
+    
+    // Set session
+    req.session.authenticated = true;
+    req.session.walletAddress = address;
+    
+    res.json({ 
+      authenticated: true, 
+      walletAddress: address,
+      message: 'Login successful' 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Logout failed' });
+    }
+    res.json({ message: 'Logged out successfully' });
+  });
+});
+
+// Health check endpoint (no auth required)
 app.get('/api/health', async (req, res) => {
   try {
     if (!mongoClient) {
@@ -125,7 +230,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Get list of databases
-app.get('/api/databases', async (req, res) => {
+app.get('/api/databases', requireAuth, async (req, res) => {
   try {
     if (!mongoClient) {
       return res.status(503).json({ error: 'Not connected to MongoDB' });
@@ -139,7 +244,7 @@ app.get('/api/databases', async (req, res) => {
 });
 
 // Create new database
-app.post('/api/databases', async (req, res) => {
+app.post('/api/databases', requireAuth, async (req, res) => {
   try {
     if (!mongoClient) {
       return res.status(503).json({ error: 'Not connected to MongoDB' });
@@ -194,7 +299,7 @@ app.post('/api/databases', async (req, res) => {
 });
 
 // Delete database
-app.delete('/api/databases/:dbName', async (req, res) => {
+app.delete('/api/databases/:dbName', requireAuth, async (req, res) => {
   try {
     if (!mongoClient) {
       return res.status(503).json({ error: 'Not connected to MongoDB' });
@@ -220,7 +325,7 @@ app.delete('/api/databases/:dbName', async (req, res) => {
 });
 
 // Get collections for a database
-app.get('/api/databases/:dbName/collections', async (req, res) => {
+app.get('/api/databases/:dbName/collections', requireAuth, async (req, res) => {
   try {
     if (!mongoClient) {
       return res.status(503).json({ error: 'Not connected to MongoDB' });
@@ -234,7 +339,7 @@ app.get('/api/databases/:dbName/collections', async (req, res) => {
 });
 
 // Get documents from a collection
-app.get('/api/databases/:dbName/collections/:collectionName/documents', async (req, res) => {
+app.get('/api/databases/:dbName/collections/:collectionName/documents', requireAuth, async (req, res) => {
   try {
     if (!mongoClient) {
       return res.status(503).json({ error: 'Not connected to MongoDB' });
@@ -264,7 +369,7 @@ app.get('/api/databases/:dbName/collections/:collectionName/documents', async (r
 });
 
 // Get document by ID
-app.get('/api/databases/:dbName/collections/:collectionName/documents/:id', async (req, res) => {
+app.get('/api/databases/:dbName/collections/:collectionName/documents/:id', requireAuth, async (req, res) => {
   try {
     if (!mongoClient) {
       return res.status(503).json({ error: 'Not connected to MongoDB' });
@@ -291,7 +396,7 @@ app.get('/api/databases/:dbName/collections/:collectionName/documents/:id', asyn
 });
 
 // Create document
-app.post('/api/databases/:dbName/collections/:collectionName/documents', async (req, res) => {
+app.post('/api/databases/:dbName/collections/:collectionName/documents', requireAuth, async (req, res) => {
   try {
     if (!mongoClient) {
       return res.status(503).json({ error: 'Not connected to MongoDB' });
@@ -306,7 +411,7 @@ app.post('/api/databases/:dbName/collections/:collectionName/documents', async (
 });
 
 // Update document
-app.put('/api/databases/:dbName/collections/:collectionName/documents/:id', async (req, res) => {
+app.put('/api/databases/:dbName/collections/:collectionName/documents/:id', requireAuth, async (req, res) => {
   try {
     if (!mongoClient) {
       return res.status(503).json({ error: 'Not connected to MongoDB' });
@@ -331,7 +436,7 @@ app.put('/api/databases/:dbName/collections/:collectionName/documents/:id', asyn
 });
 
 // Delete document
-app.delete('/api/databases/:dbName/collections/:collectionName/documents/:id', async (req, res) => {
+app.delete('/api/databases/:dbName/collections/:collectionName/documents/:id', requireAuth, async (req, res) => {
   try {
     if (!mongoClient) {
       return res.status(503).json({ error: 'Not connected to MongoDB' });
@@ -355,7 +460,7 @@ app.delete('/api/databases/:dbName/collections/:collectionName/documents/:id', a
 });
 
 // Run query
-app.post('/api/databases/:dbName/collections/:collectionName/query', async (req, res) => {
+app.post('/api/databases/:dbName/collections/:collectionName/query', requireAuth, async (req, res) => {
   try {
     if (!mongoClient) {
       return res.status(503).json({ error: 'Not connected to MongoDB' });
@@ -378,7 +483,7 @@ app.post('/api/databases/:dbName/collections/:collectionName/query', async (req,
 });
 
 // Get collection stats
-app.get('/api/databases/:dbName/collections/:collectionName/stats', async (req, res) => {
+app.get('/api/databases/:dbName/collections/:collectionName/stats', requireAuth, async (req, res) => {
   try {
     if (!mongoClient) {
       return res.status(503).json({ error: 'Not connected to MongoDB' });
@@ -392,7 +497,7 @@ app.get('/api/databases/:dbName/collections/:collectionName/stats', async (req, 
 });
 
 // Export database
-app.get('/api/databases/:dbName/export', async (req, res) => {
+app.get('/api/databases/:dbName/export', requireAuth, async (req, res) => {
   try {
     if (!mongoClient) {
       return res.status(503).json({ error: 'Not connected to MongoDB' });
@@ -426,7 +531,7 @@ app.get('/api/databases/:dbName/export', async (req, res) => {
 });
 
 // Import database
-app.post('/api/databases/:dbName/import', upload.single('file'), async (req, res) => {
+app.post('/api/databases/:dbName/import', requireAuth, upload.single('file'), async (req, res) => {
   try {
     if (!mongoClient) {
       return res.status(503).json({ error: 'Not connected to MongoDB' });

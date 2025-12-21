@@ -8,16 +8,170 @@ const pageSize = 20;
 const API_BASE = '/api';
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    await checkAuthStatus();
     checkConnection();
-    loadDatabases();
     setInterval(checkConnection, 5000); // Check connection every 5 seconds
 });
+
+// Check authentication status
+async function checkAuthStatus() {
+    try {
+        const response = await fetch(`${API_BASE}/auth/status`, { credentials: 'include' });
+        const data = await response.json();
+        
+        if (data.enabled && !data.authenticated) {
+            showLoginModal();
+        } else if (data.authenticated) {
+            updateAuthUI(data.walletAddress);
+            loadDatabases();
+        } else {
+            // Auth disabled
+            loadDatabases();
+        }
+    } catch (error) {
+        console.error('Auth check failed:', error);
+        // If auth is disabled, continue normally
+        loadDatabases();
+    }
+}
+
+// Update auth UI
+function updateAuthUI(walletAddress) {
+    const authStatusEl = document.getElementById('authStatus');
+    const walletAddressEl = document.getElementById('walletAddress');
+    if (walletAddress) {
+        const shortAddress = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+        walletAddressEl.textContent = `🦊 ${shortAddress}`;
+        authStatusEl.style.display = 'block';
+    }
+}
+
+// Show login modal
+function showLoginModal() {
+    document.getElementById('loginModal').style.display = 'block';
+}
+
+// Close login modal
+function closeLoginModal() {
+    document.getElementById('loginModal').style.display = 'none';
+}
+
+// Connect wallet and login
+async function connectWallet() {
+    const statusEl = document.getElementById('loginStatus');
+    statusEl.style.display = 'block';
+    statusEl.innerHTML = '<div style="color: #3498db;">Connecting wallet...</div>';
+    
+    try {
+        // Check if Web3 is available
+        if (typeof window.ethereum === 'undefined') {
+            throw new Error('Please install MetaMask or another Web3 wallet');
+        }
+        
+        // Request account access
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        if (accounts.length === 0) {
+            throw new Error('No accounts found. Please unlock your wallet.');
+        }
+        
+        const walletAddress = accounts[0];
+        statusEl.innerHTML = '<div style="color: #3498db;">Please sign the message in your wallet...</div>';
+        
+        // Create message to sign
+        const message = `Sign in to MongoDB Admin UI\n\nWallet: ${walletAddress}\nTimestamp: ${Date.now()}`;
+        
+        // Sign message using ethers.js (v5 from CDN)
+        let signature;
+        if (typeof ethers !== 'undefined') {
+            try {
+                // Try ethers v5 (from CDN)
+                if (ethers.providers && ethers.providers.Web3Provider) {
+                    const provider = new ethers.providers.Web3Provider(window.ethereum);
+                    const signer = provider.getSigner();
+                    signature = await signer.signMessage(message);
+                } else if (ethers.BrowserProvider) {
+                    // ethers v6
+                    const provider = new ethers.BrowserProvider(window.ethereum);
+                    const signer = await provider.getSigner();
+                    signature = await signer.signMessage(message);
+                } else {
+                    throw new Error('ethers.js not properly loaded');
+                }
+            } catch (err) {
+                // Fallback: use personal_sign directly
+                signature = await window.ethereum.request({
+                    method: 'personal_sign',
+                    params: [message, walletAddress]
+                });
+            }
+        } else {
+            // Fallback: use personal_sign directly
+            signature = await window.ethereum.request({
+                method: 'personal_sign',
+                params: [message, walletAddress]
+            });
+        }
+        
+        statusEl.innerHTML = '<div style="color: #3498db;">Verifying signature...</div>';
+        
+        // Send to backend
+        const response = await fetch(`${API_BASE}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                signature,
+                message,
+                walletAddress
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.error || 'Login failed');
+        }
+        
+        statusEl.innerHTML = '<div style="background: #d4edda; color: #155724; padding: 1rem; border-radius: 4px;">✓ Login successful!</div>';
+        
+        // Update UI and reload
+        setTimeout(() => {
+            closeLoginModal();
+            updateAuthUI(result.walletAddress);
+            loadDatabases();
+        }, 1000);
+        
+    } catch (error) {
+        statusEl.innerHTML = `<div class="error">${error.message}</div>`;
+    }
+}
+
+// Logout
+async function logout() {
+    try {
+        const response = await fetch(`${API_BASE}/auth/logout`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            document.getElementById('authStatus').style.display = 'none';
+            showLoginModal();
+            // Clear UI
+            document.getElementById('welcomeView').style.display = 'block';
+            document.getElementById('collectionView').style.display = 'none';
+            document.getElementById('databaseList').innerHTML = '';
+        }
+    } catch (error) {
+        showError('Logout failed: ' + error.message);
+    }
+}
 
 // Check MongoDB connection
 async function checkConnection() {
     try {
-        const response = await fetch(`${API_BASE}/health`);
+        const response = await fetch(`${API_BASE}/health`, { credentials: 'include' });
         const data = await response.json();
         const statusEl = document.getElementById('connectionStatus');
         const dot = statusEl.querySelector('.status-dot');
@@ -42,7 +196,20 @@ async function checkConnection() {
 // Load databases
 async function loadDatabases() {
     try {
-        const response = await fetch(`${API_BASE}/databases`);
+        const response = await fetch(`${API_BASE}/databases`, { credentials: 'include' });
+        
+        if (response.status === 401) {
+            const data = await response.json();
+            if (data.requiresAuth) {
+                showLoginModal();
+                return;
+            }
+        }
+        
+        if (!response.ok) {
+            throw new Error('Failed to load databases');
+        }
+        
         const databases = await response.json();
         const listEl = document.getElementById('databaseList');
         listEl.innerHTML = '';
@@ -88,7 +255,7 @@ async function loadDatabases() {
 async function loadCollections(dbName) {
     try {
         currentDb = dbName;
-        const response = await fetch(`${API_BASE}/databases/${dbName}/collections`);
+        const response = await fetch(`${API_BASE}/databases/${dbName}/collections`, { credentials: 'include' });
         const collections = await response.json();
         const listEl = document.getElementById('databaseList');
         
@@ -125,7 +292,8 @@ async function loadDocuments(dbName, collectionName, page = 0) {
         currentPage = page;
         
         const response = await fetch(
-            `${API_BASE}/databases/${dbName}/collections/${collectionName}/documents?limit=${pageSize}&skip=${page * pageSize}`
+            `${API_BASE}/databases/${dbName}/collections/${collectionName}/documents?limit=${pageSize}&skip=${page * pageSize}`,
+            { credentials: 'include' }
         );
         const data = await response.json();
         
@@ -166,7 +334,8 @@ function createDocumentCard(doc) {
 async function showEditModal(docId) {
     try {
         const response = await fetch(
-            `${API_BASE}/databases/${currentDb}/collections/${currentCollection}/documents/${docId}`
+            `${API_BASE}/databases/${currentDb}/collections/${currentCollection}/documents/${docId}`,
+            { credentials: 'include' }
         );
         const doc = await response.json();
         document.getElementById('editDocumentJson').value = JSON.stringify(doc, null, 2);
@@ -204,6 +373,7 @@ async function saveDocument() {
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify(doc)
             }
         );
@@ -232,6 +402,7 @@ async function updateDocument() {
             {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify(doc)
             }
         );
@@ -258,7 +429,7 @@ async function deleteDocument() {
         const docId = document.getElementById('editDocumentModal').dataset.docId;
         const response = await fetch(
             `${API_BASE}/databases/${currentDb}/collections/${currentCollection}/documents/${docId}`,
-            { method: 'DELETE' }
+            { method: 'DELETE', credentials: 'include' }
         );
         
         if (response.ok) {
@@ -317,7 +488,7 @@ function showError(message) {
 async function exportDatabase(dbName) {
     try {
         showError(`Exporting database "${dbName}"...`);
-        const response = await fetch(`${API_BASE}/databases/${dbName}/export`);
+        const response = await fetch(`${API_BASE}/databases/${dbName}/export`, { credentials: 'include' });
         
         if (!response.ok) {
             const error = await response.json();
@@ -388,6 +559,7 @@ async function createDatabase() {
         const response = await fetch(`${API_BASE}/databases`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ dbName })
         });
         
@@ -420,7 +592,8 @@ async function deleteDatabase(dbName) {
     
     try {
         const response = await fetch(`${API_BASE}/databases/${dbName}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            credentials: 'include'
         });
         
         const result = await response.json();
@@ -471,6 +644,7 @@ async function importDatabase() {
     try {
         const response = await fetch(`${API_BASE}/databases/${dbName}/import`, {
             method: 'POST',
+            credentials: 'include',
             body: formData
         });
         

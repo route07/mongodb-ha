@@ -5,14 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MongoDB Admin UI</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
         <header>
             <h1>🗄️ MongoDB Admin UI</h1>
-            <div class="connection-status" id="connectionStatus">
-                <span class="status-dot"></span>
-                <span>Connecting...</span>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <div id="authStatus" style="display: none;">
+                    <span id="walletAddress" style="font-size: 0.85rem; color: #27ae60; margin-right: 0.5rem;"></span>
+                    <button class="btn btn-secondary" onclick="logout()" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Logout</button>
+                </div>
+                <div class="connection-status" id="connectionStatus">
+                    <span class="status-dot"></span>
+                    <span>Connecting...</span>
+                </div>
             </div>
         </header>
 
@@ -109,6 +116,30 @@
                 <div class="modal-actions">
                     <button class="btn btn-secondary" onclick="closeCreateDatabaseModal()">Cancel</button>
                     <button class="btn btn-primary" onclick="createDatabase()">Create</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Web3 Login Modal -->
+    <div id="loginModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🔐 Web3 Login</h3>
+                <span class="close" onclick="closeLoginModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 1rem;">Connect your wallet to access the MongoDB Admin UI</p>
+                <div id="loginStatus" style="margin: 1rem 0; display: none;"></div>
+                <div class="modal-actions">
+                    <button class="btn btn-primary" onclick="connectWallet()" style="width: 100%; padding: 0.75rem;">
+                        Connect Wallet
+                    </button>
+                </div>
+                <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e0e0e0;">
+                    <small style="color: #7f8c8d;">
+                        Make sure you have MetaMask or another Web3 wallet installed and unlocked.
+                    </small>
                 </div>
             </div>
         </div>
