@@ -23,21 +23,17 @@ Edit the `.env` file with your desired credentials:
 
 ```bash
 # Mongo DB
-MONGO_INITDB_ROOT_USERNAME=rbdbuser
+MONGO_INITDB_ROOT_USERNAME=dbUser
 MONGO_INITDB_ROOT_PASSWORD=your_password_here
 MONGO_PORT=27017
 
-# Mongo Express (legacy)
-ME_CONFIG_MONGODB_ADMINUSERNAME=rbdbuser
-ME_CONFIG_MONGODB_ADMINPASSWORD=your_password_here
-ME_CONFIG_MONGODB_SERVER=mongodb
-ME_CONFIG_MONGODB_PORT=27017
-ME_CONFIG_BASICAUTH_USERNAME=adminu
-ME_CONFIG_BASICAUTH_PASSWORD=adminPassword
-MONGO_EXPRESS_PORT=8992
-
 # Custom MongoDB Admin UI (recommended - supports TLS)
 ADMIN_UI_PORT=3000
+
+# Web3 Authentication. Add one or more admin wallets
+WEB3_AUTH_ENABLED=false
+ADMIN_WALLETS=0x9220160e87D7995bC551a109C61505d60C9eC33B,0x97a362bC0d128E008E2E2eD7Fc10CFDdDF54ed55
+SESSION_SECRET=change-this-secret-in-production
 ```
 
 ### 3. Start Services
