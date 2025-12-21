@@ -50,22 +50,28 @@ echo "Step 2: Backing up docker-compose.yaml..."
 cp docker-compose.yaml docker-compose.yaml.backup
 
 echo ""
-echo "Step 3: Creating temporary docker-compose without keyFile..."
-# Use sed to remove --keyFile lines from mongodb-primary command
+echo "Step 3: Creating temporary docker-compose without keyFile and replica set..."
+# Use sed to remove --keyFile and --replSet lines from mongodb-primary command
 sed -e '/mongodb-primary:/,/^  [a-z]/ {
   /--keyFile/d
   /keyFile/d
+  /--replSet/d
+  /replSet/d
 }' docker-compose.yaml > docker-compose.tmp.yaml
 
 # Also remove from secondary commands to be safe
 sed -i -e '/mongodb-secondary-1:/,/^  [a-z]/ {
   /--keyFile/d
   /keyFile/d
+  /--replSet/d
+  /replSet/d
 }' docker-compose.tmp.yaml
 
 sed -i -e '/mongodb-secondary-2:/,/^  [a-z]/ {
   /--keyFile/d
   /keyFile/d
+  /--replSet/d
+  /replSet/d
 }' docker-compose.tmp.yaml
 
 if [ ! -f docker-compose.tmp.yaml ]; then
@@ -73,7 +79,7 @@ if [ ! -f docker-compose.tmp.yaml ]; then
   exit 1
 fi
 
-echo "✓ Created docker-compose.tmp.yaml (without keyFile)"
+echo "✓ Created docker-compose.tmp.yaml (without keyFile and replica set)"
 
 echo ""
 echo "Step 4: Starting MongoDB primary WITHOUT keyFile (no auth)..."
