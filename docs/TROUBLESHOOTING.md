@@ -30,9 +30,25 @@ rm -rf db_data_secondary2/
 docker-compose up -d
 ```
 
-**Solution 2: Keep Data and Create User**
+**Solution 2: Use the Remote Fix Script (Recommended)**
 
-If you need to preserve data, the `mongodb-init-user` container will automatically create the user if it doesn't exist. However, if MongoDB requires authentication but the user doesn't exist, you may need to:
+For remote servers where MongoDB requires authentication but the user doesn't exist:
+
+```bash
+# Run the comprehensive fix script
+./scripts/fix-missing-user-remote.sh
+```
+
+This script will:
+- Detect if MongoDB requires authentication
+- Temporarily disable authentication if needed
+- Create the user
+- Re-enable authentication
+- Verify everything works
+
+**Solution 3: Keep Data and Create User Manually**
+
+If you need to preserve data and the automatic script doesn't work, you may need to:
 
 1. **Temporarily disable authentication** (if possible):
    ```bash
@@ -279,6 +295,24 @@ docker-compose up -d
    ```bash
    docker exec mongo-admin ping -c 2 mongodb-primary
    ```
+
+## Quick Fix Scripts
+
+### Fix Missing User (Simple)
+```bash
+./scripts/fix-missing-user.sh
+```
+Use this if MongoDB allows unauthenticated connections.
+
+### Fix Missing User (Remote Server - Comprehensive)
+```bash
+./scripts/fix-missing-user-remote.sh
+```
+Use this on remote servers where MongoDB requires authentication. This script will:
+- Temporarily disable authentication if needed
+- Create the user
+- Re-enable authentication
+- Verify everything works
 
 ## General Debugging Commands
 
