@@ -1,0 +1,51 @@
+#version: '3.8'
+
+services:
+# MongoDB instance
+  mongo-survey:
+    image: mongo:7.0
+    container_name: mongo-survey
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - ./db_data:/data/db
+      - ./tls-certs:/etc/mongo/ssl:ro
+    command: >
+      mongod
+      --tlsMode requireTLS
+      --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
+      --tlsCAFile /etc/mongo/ssl/ca.crt
+      --bind_ip_all
+    networks:
+      - survey-network
+
+  ## MongoDB admin UI
+  mongo-express-survey:
+    image: mongo-express
+    container_name: mongo-express-survey
+    restart: unless-stopped
+    ports:
+      - "${MONGO_EXPRESS_PORT:-8992}:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${ME_CONFIG_MONGODB_ADMINUSERNAME}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${ME_CONFIG_MONGODB_ADMINPASSWORD}
+      ME_CONFIG_MONGODB_SERVER: ${ME_CONFIG_MONGODB_SERVER}
+      ME_CONFIG_MONGODB_PORT: ${ME_CONFIG_MONGODB_PORT}
+      ME_CONFIG_MONGODB_SSL: ${ME_CONFIG_MONGODB_SSL}
+      ME_CONFIG_MONGODB_SSL_CA: ${ME_CONFIG_MONGODB_SSL_CA}
+      ME_CONFIG_BASICAUTH_USERNAME: ${ME_CONFIG_BASICAUTH_USERNAME}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${ME_CONFIG_BASICAUTH_PASSWORD}
+    volumes:
+      - ./tls-certs:/etc/mongo/ssl:ro
+    depends_on:
+      - mongo-survey
+    networks:
+      - survey-network
+
+networks:
+  survey-network:
+    driver: bridge

@@ -1,0 +1,14 @@
+# TLS Certificates (sensitive)
+tls-certs/
+*.key
+*.pem
+*.crt
+*.csr
+*.srl
+
+# Database data
+db_data/
+
+# Environment files
+.env
+.env.local
