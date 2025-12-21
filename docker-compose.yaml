@@ -20,7 +20,6 @@ services:
     command: >
       mongod
       --replSet ${REPLICA_SET_NAME:-rs0}
-      --keyFile /etc/mongo/ssl/keyfile
       --tlsMode requireTLS
       --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
       --tlsCAFile /etc/mongo/ssl/ca.crt
@@ -51,7 +50,6 @@ services:
     command: >
       mongod
       --replSet ${REPLICA_SET_NAME:-rs0}
-      --keyFile /etc/mongo/ssl/keyfile
       --tlsMode requireTLS
       --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
       --tlsCAFile /etc/mongo/ssl/ca.crt
@@ -85,7 +83,6 @@ services:
     command: >
       mongod
       --replSet ${REPLICA_SET_NAME:-rs0}
-      --keyFile /etc/mongo/ssl/keyfile
       --tlsMode requireTLS
       --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
       --tlsCAFile /etc/mongo/ssl/ca.crt
@@ -103,28 +100,7 @@ services:
       mongodb-primary:
         condition: service_healthy
 
-  # Ensure root user exists (runs after primary is up)
-  # This container is idempotent - exits immediately if user already exists
-  mongodb-init-user:
-    image: mongo:7.0
-    container_name: mongo-init-user
-    restart: "no"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
-    volumes:
-      - ./tls-certs:/etc/mongo/ssl:ro
-      - ./scripts:/scripts:ro
-    entrypoint: ["bash", "/scripts/init-user.sh"]
-    command: ["mongodb-primary", "27017"]
-    networks:
-      - db-network
-    depends_on:
-      mongodb-primary:
-        condition: service_started
-
   # Replica Set Initialization Service
-  # This container is idempotent - exits immediately if replica set already initialized
   mongodb-init:
     image: mongo:7.0
     container_name: mongo-init
@@ -146,8 +122,6 @@ services:
         condition: service_healthy
       mongodb-secondary-2:
         condition: service_healthy
-      mongodb-init-user:
-        condition: service_completed_successfully
 
   ## Custom MongoDB Admin UI (with TLS and Replica Set support)
   mongo-admin:
@@ -179,12 +153,8 @@ services:
         condition: service_healthy
       mongodb-secondary-2:
         condition: service_healthy
-      # Init containers: use service_started to allow mongo-admin to start
-      # even if init containers fail (they'll exit gracefully if user can't be created)
       mongodb-init:
-        condition: service_started
-      mongodb-init-user:
-        condition: service_started
+        condition: service_completed_successfully
     networks:
       - db-network
 

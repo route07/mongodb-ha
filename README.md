@@ -74,6 +74,12 @@ mongosh "mongodb://your_username:your_password@localhost:27017/?tls=true&tlsCAFi
 - **mongo-admin**: Custom web-based MongoDB admin interface with full TLS support
 - **mongo-express**: Legacy MongoDB admin interface (mongo-express)
 
+## Remote Server Deployment
+
+**Quick Start**: See [DEPLOY_QUICK.md](./DEPLOY_QUICK.md) for fast deployment steps.
+
+**Complete Guide**: See [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) for detailed remote server deployment instructions.
+
 ## High Availability (Replica Set) Setup
 
 This setup also supports a **3-node replica set** for High Availability with automatic failover.
