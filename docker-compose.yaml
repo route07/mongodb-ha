@@ -20,6 +20,7 @@ services:
     command: >
       mongod
       --replSet ${REPLICA_SET_NAME:-rs0}
+      --keyFile /etc/mongo/ssl/keyfile
       --tlsMode requireTLS
       --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
       --tlsCAFile /etc/mongo/ssl/ca.crt
@@ -50,6 +51,7 @@ services:
     command: >
       mongod
       --replSet ${REPLICA_SET_NAME:-rs0}
+      --keyFile /etc/mongo/ssl/keyfile
       --tlsMode requireTLS
       --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
       --tlsCAFile /etc/mongo/ssl/ca.crt
@@ -83,6 +85,7 @@ services:
     command: >
       mongod
       --replSet ${REPLICA_SET_NAME:-rs0}
+      --keyFile /etc/mongo/ssl/keyfile
       --tlsMode requireTLS
       --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
       --tlsCAFile /etc/mongo/ssl/ca.crt
