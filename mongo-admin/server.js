@@ -80,12 +80,35 @@ async function connectToMongoDB() {
     const password = encodeURIComponent(process.env.MONGO_PASSWORD || '');
     const host = process.env.MONGO_HOST || 'mongodb';
     const port = process.env.MONGO_PORT || '27017';
+    const replicaSet = process.env.MONGO_REPLICA_SET;
     
-    let mongoUrl = process.env.MONGO_URL || `mongodb://${username}:${password}@${host}:${port}/?authSource=admin`;
+    // Build connection string - support replica set if configured
+    let mongoUrl;
+    if (process.env.MONGO_URL) {
+      mongoUrl = process.env.MONGO_URL;
+    } else if (replicaSet) {
+      // Replica set connection string with all members
+      const primary = `${host}:${port}`;
+      const secondary1 = process.env.MONGO_SECONDARY1_HOST || 'mongodb-secondary-1';
+      const secondary2 = process.env.MONGO_SECONDARY2_HOST || 'mongodb-secondary-2';
+      const members = `${primary},${secondary1}:${port},${secondary2}:${port}`;
+      mongoUrl = `mongodb://${username}:${password}@${members}/?authSource=admin&replicaSet=${replicaSet}`;
+      console.log('Using replica set connection:', replicaSet);
+    } else {
+      // Single node connection
+      mongoUrl = `mongodb://${username}:${password}@${host}:${port}/?authSource=admin`;
+    }
     
     const options = {
       authSource: 'admin',
     };
+    
+    // Add replica set name to options if configured
+    if (replicaSet) {
+      options.replicaSet = replicaSet;
+      // For replica sets, prefer reading from primary but allow secondary reads
+      options.readPreference = 'primaryPreferred';
+    }
 
     // TLS configuration
     if (process.env.MONGO_TLS === 'true') {

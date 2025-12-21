@@ -74,6 +74,47 @@ mongosh "mongodb://your_username:your_password@localhost:27017/?tls=true&tlsCAFi
 - **mongo-admin**: Custom web-based MongoDB admin interface with full TLS support
 - **mongo-express**: Legacy MongoDB admin interface (mongo-express)
 
+## High Availability (Replica Set) Setup
+
+This setup also supports a **3-node replica set** for High Availability with automatic failover.
+
+### Quick Start for HA
+
+1. **Regenerate TLS certificates** (includes replica set hostnames):
+   ```bash
+   ./scripts/generate-tls-certs.sh
+   ```
+
+2. **Configure environment** (add to `.env`):
+   ```bash
+   REPLICA_SET_NAME=rs0
+   ```
+
+3. **Start HA services**:
+   ```bash
+   docker-compose -f docker-compose.ha.yaml up -d --build
+   ```
+
+This will start:
+- 3 MongoDB nodes (1 primary + 2 secondaries)
+- Automatic replica set initialization
+- Admin UI with replica set support
+
+### HA Features
+
+- ✅ Automatic failover (primary → secondary)
+- ✅ Data redundancy (3 copies)
+- ✅ Read scaling (read from secondaries)
+- ✅ Zero-downtime maintenance
+
+### Connection String for HA
+
+```bash
+mongosh "mongodb://username:password@localhost:27017/?replicaSet=rs0&tls=true&tlsCAFile=./tls-certs/ca.crt&tlsAllowInvalidCertificates=true&authSource=admin"
+```
+
+**See [HA_SETUP.md](./docs/HA_SETUP.md) for complete HA setup guide, migration instructions, and troubleshooting.**
+
 ## Stop Services
 
 ```bash

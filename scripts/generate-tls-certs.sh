@@ -26,11 +26,15 @@ openssl req -new -key "$CERT_DIR/server.key" -out "$CERT_DIR/server.csr" \
   -subj "/CN=mongodb/O=MongoDB"
 
 # Create server certificate extensions file
+# Include all replica set member hostnames for HA setup
 cat > "$CERT_DIR/server.ext" <<EOF
 subjectAltName = @alt_names
 [alt_names]
 DNS.1 = mongodb
-DNS.2 = localhost
+DNS.2 = mongodb-primary
+DNS.3 = mongodb-secondary-1
+DNS.4 = mongodb-secondary-2
+DNS.5 = localhost
 IP.1 = 127.0.0.1
 EOF
 
