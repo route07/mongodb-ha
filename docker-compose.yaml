@@ -20,6 +20,12 @@ services:
       --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
       --tlsCAFile /etc/mongo/ssl/ca.crt
       --bind_ip_all
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh \"mongodb://$${MONGO_INITDB_ROOT_USERNAME}:$${MONGO_INITDB_ROOT_PASSWORD}@localhost:27017/?tls=true&tlsAllowInvalidCertificates=true&authSource=admin\" --eval \"db.adminCommand('ping')\" --quiet || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - survey-network
 
@@ -41,7 +47,8 @@ services:
     volumes:
       - ./tls-certs:/etc/mongo/ssl:ro
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
     networks:
       - survey-network
 
