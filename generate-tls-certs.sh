@@ -54,8 +54,12 @@ openssl x509 -req -in "$CERT_DIR/client.csr" -CA "$CERT_DIR/ca.crt" -CAkey "$CER
 cat "$CERT_DIR/client.crt" "$CERT_DIR/client.key" > "$CERT_DIR/client.pem"
 
 # Set proper permissions
-chmod 600 "$CERT_DIR"/*.key "$CERT_DIR"/*.pem
+# server.pem needs to be readable by MongoDB user (UID 999) in container
+chmod 644 "$CERT_DIR"/server.pem
+chmod 600 "$CERT_DIR"/*.key
 chmod 644 "$CERT_DIR"/*.crt
+# client.pem can remain more restrictive if not used
+chmod 600 "$CERT_DIR"/client.pem 2>/dev/null || true
 
 # Clean up temporary files
 rm -f "$CERT_DIR"/*.csr "$CERT_DIR"/*.ext "$CERT_DIR"/*.srl
