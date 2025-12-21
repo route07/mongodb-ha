@@ -169,7 +169,7 @@ See [database-export/README.md](./database-export/README.md) for complete export
    - Select your JSON file
    - Import!
 
-See [EXPORT_IMPORT_GUIDE.md](./EXPORT_IMPORT_GUIDE.md) for detailed instructions and troubleshooting.
+See [EXPORT_IMPORT_GUIDE.md](./docs/EXPORT_IMPORT_GUIDE.md) for detailed instructions and troubleshooting.
 
 ## Notes
 
