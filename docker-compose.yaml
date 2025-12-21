@@ -104,6 +104,7 @@ services:
         condition: service_healthy
 
   # Ensure root user exists (runs after primary is up)
+  # This container is idempotent - exits immediately if user already exists
   mongodb-init-user:
     image: mongo:7.0
     container_name: mongo-init-user
@@ -123,6 +124,7 @@ services:
         condition: service_started
 
   # Replica Set Initialization Service
+  # This container is idempotent - exits immediately if replica set already initialized
   mongodb-init:
     image: mongo:7.0
     container_name: mongo-init
@@ -177,10 +179,12 @@ services:
         condition: service_healthy
       mongodb-secondary-2:
         condition: service_healthy
+      # Init containers: use service_started to allow mongo-admin to start
+      # even if init containers fail (they'll exit gracefully if user can't be created)
       mongodb-init:
-        condition: service_completed_successfully
+        condition: service_started
       mongodb-init-user:
-        condition: service_completed_successfully
+        condition: service_started
     networks:
       - db-network
 

@@ -40,10 +40,7 @@ done
 
 echo "Checking if root user exists..."
 
-# Check if user exists (try with auth first, then without)
-USER_EXISTS=false
-
-# Try with authentication
+# Try with authentication first (fastest check)
 if mongosh --tls \
   --tlsAllowInvalidCertificates \
   --tlsCAFile /etc/mongo/ssl/ca.crt \
@@ -55,8 +52,12 @@ if mongosh --tls \
   --quiet \
   > /dev/null 2>&1; then
   echo "✓ Root user '$MONGO_USERNAME' exists and authentication works"
+  echo "✓ No action needed - exiting immediately"
   exit 0
 fi
+
+# Check if user exists (try with auth first, then without)
+USER_EXISTS=false
 
 # Try without authentication to check if user exists
 USER_CHECK=$(mongosh --tls \
@@ -90,7 +91,9 @@ fi
 echo "Root user not found. Creating root user..."
 
 # Create the root user (without authentication)
-mongosh --tls \
+# Temporarily disable set -e to handle errors gracefully
+set +e
+CREATE_RESULT=$(mongosh --tls \
   --tlsAllowInvalidCertificates \
   --tlsCAFile /etc/mongo/ssl/ca.crt \
   --host "$HOST:$PORT" \
@@ -111,11 +114,26 @@ mongosh --tls \
         throw e;
       }
     }
-  " 2>&1
+  " 2>&1)
+CREATE_EXIT_CODE=$?
+set -e
 
-if [ $? -eq 0 ]; then
+if echo "$CREATE_RESULT" | grep -q "SUCCESS\|ALREADY_EXISTS"; then
   echo "✓ Root user '$MONGO_USERNAME' created successfully"
+  exit 0
+elif echo "$CREATE_RESULT" | grep -q "requires authentication\|authentication\|Command createUser requires"; then
+  echo "⚠️  Cannot create user: MongoDB requires authentication"
+  echo ""
+  echo "This is a chicken-and-egg problem that cannot be fixed automatically."
+  echo "You need to run the manual fix script:"
+  echo ""
+  echo "  ./scripts/fix-user-quick.sh"
+  echo ""
+  echo "Or see: MANUAL_FIX_REMOTE.md"
+  echo ""
+  echo "Exiting gracefully (code 0) to allow other services to start..."
+  exit 0
 else
-  echo "✗ Failed to create root user"
+  echo "✗ Failed to create root user: $CREATE_RESULT"
   exit 1
 fi
