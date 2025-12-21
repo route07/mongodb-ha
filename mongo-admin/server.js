@@ -677,6 +677,112 @@ app.post('/api/databases/:dbName/import', requireAuth, upload.single('file'), as
   }
 });
 
+// Replica Set Status endpoints
+app.get('/api/replica-set/status', requireAuth, async (req, res) => {
+  try {
+    if (!mongoClient) {
+      return res.status(503).json({ error: 'Not connected to MongoDB' });
+    }
+    
+    const adminDb = mongoClient.db().admin();
+    const status = await adminDb.command({ replSetGetStatus: 1 });
+    
+    res.json(status);
+  } catch (error) {
+    // If not a replica set, return null
+    if (error.codeName === 'NotYetInitialized' || error.message.includes('not running with --replSet')) {
+      return res.json({ isReplicaSet: false });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/replica-set/ismaster', requireAuth, async (req, res) => {
+  try {
+    if (!mongoClient) {
+      return res.status(503).json({ error: 'Not connected to MongoDB' });
+    }
+    
+    const adminDb = mongoClient.db().admin();
+    const isMaster = await adminDb.command({ isMaster: 1 });
+    
+    res.json(isMaster);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/replica-set/replication-lag', requireAuth, async (req, res) => {
+  try {
+    if (!mongoClient) {
+      return res.status(503).json({ error: 'Not connected to MongoDB' });
+    }
+    
+    const adminDb = mongoClient.db().admin();
+    const status = await adminDb.command({ replSetGetStatus: 1 });
+    
+    // Calculate replication lag for each secondary
+    const primary = status.members.find(m => m.stateStr === 'PRIMARY');
+    if (!primary) {
+      return res.json({ error: 'No primary found' });
+    }
+    
+    // Get primary optime
+    let primaryOptime = null;
+    if (primary.optimeDate) {
+      primaryOptime = primary.optimeDate;
+    } else if (primary.optime && primary.optime.ts) {
+      // Handle Timestamp object
+      if (typeof primary.optime.ts.getHighBits === 'function') {
+        primaryOptime = new Date(primary.optime.ts.getHighBits() * 1000);
+      } else if (primary.optime.ts.constructor && primary.optime.ts.constructor.name === 'Timestamp') {
+        primaryOptime = new Date(primary.optime.ts.getHighBits() * 1000);
+      }
+    }
+    
+    const lagInfo = status.members.map(member => {
+      if (member.stateStr === 'PRIMARY') {
+        return {
+          name: member.name,
+          state: member.stateStr,
+          lag: 0,
+          lagSeconds: 0
+        };
+      }
+      
+      // Get member optime
+      let memberOptime = null;
+      if (member.optimeDate) {
+        memberOptime = member.optimeDate;
+      } else if (member.optime && member.optime.ts) {
+        if (typeof member.optime.ts.getHighBits === 'function') {
+          memberOptime = new Date(member.optime.ts.getHighBits() * 1000);
+        } else if (member.optime.ts.constructor && member.optime.ts.constructor.name === 'Timestamp') {
+          memberOptime = new Date(member.optime.ts.getHighBits() * 1000);
+        }
+      }
+      
+      const lag = (primaryOptime && memberOptime) ? primaryOptime - memberOptime : null;
+      
+      return {
+        name: member.name,
+        state: member.stateStr,
+        lag: lag,
+        lagSeconds: lag ? Math.floor(lag / 1000) : null,
+        health: member.health,
+        uptime: member.uptime || 0
+      };
+    });
+    
+    res.json({ members: lagInfo });
+  } catch (error) {
+    if (error.codeName === 'NotYetInitialized' || error.message.includes('not running with --replSet')) {
+      return res.json({ isReplicaSet: false });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Serve frontend
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

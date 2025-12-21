@@ -10,9 +10,13 @@ Quick reference for setting up High Availability MongoDB replica set.
 
 ## Setup Steps
 
-### 1. Regenerate TLS Certificates
+### 1. Generate TLS Certificates and KeyFile
 ```bash
+# Generate TLS certificates (includes replica set hostnames)
 ./scripts/generate-tls-certs.sh
+
+# Generate keyFile for replica set authentication
+./scripts/generate-keyfile.sh
 ```
 
 ### 2. Configure Environment

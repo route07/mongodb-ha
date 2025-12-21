@@ -16,9 +16,11 @@ services:
       - ./db_data_primary:/data/db
       - ./tls-certs:/etc/mongo/ssl:ro
       - ./scripts:/scripts:ro
+    entrypoint: ["bash", "/scripts/fix-keyfile-permissions.sh"]
     command: >
       mongod
       --replSet ${REPLICA_SET_NAME:-rs0}
+      --keyFile /etc/mongo/ssl/keyfile
       --tlsMode requireTLS
       --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
       --tlsCAFile /etc/mongo/ssl/ca.crt
@@ -45,9 +47,11 @@ services:
       - ./db_data_secondary1:/data/db
       - ./tls-certs:/etc/mongo/ssl:ro
       - ./scripts:/scripts:ro
+    entrypoint: ["bash", "/scripts/fix-keyfile-permissions.sh"]
     command: >
       mongod
       --replSet ${REPLICA_SET_NAME:-rs0}
+      --keyFile /etc/mongo/ssl/keyfile
       --tlsMode requireTLS
       --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
       --tlsCAFile /etc/mongo/ssl/ca.crt
@@ -77,9 +81,11 @@ services:
       - ./db_data_secondary2:/data/db
       - ./tls-certs:/etc/mongo/ssl:ro
       - ./scripts:/scripts:ro
+    entrypoint: ["bash", "/scripts/fix-keyfile-permissions.sh"]
     command: >
       mongod
       --replSet ${REPLICA_SET_NAME:-rs0}
+      --keyFile /etc/mongo/ssl/keyfile
       --tlsMode requireTLS
       --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
       --tlsCAFile /etc/mongo/ssl/ca.crt

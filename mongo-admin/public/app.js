@@ -12,6 +12,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     await checkAuthStatus();
     checkConnection();
     setInterval(checkConnection, 5000); // Check connection every 5 seconds
+    loadReplicaSetStatus(); // Load cluster status on startup
+    setInterval(loadReplicaSetStatus, 10000); // Auto-refresh cluster status every 10 seconds
 });
 
 // Check authentication status
@@ -687,6 +689,273 @@ async function deleteDatabase(dbName) {
         
     } catch (error) {
         showError(`Delete failed: ${error.message}`);
+    }
+}
+
+// Replica Set Status functions
+let clusterAutoRefreshInterval = null;
+
+async function loadReplicaSetStatus() {
+    try {
+        const response = await fetch(`${API_BASE}/replica-set/status`, { credentials: 'include' });
+        
+        if (response.status === 401 || response.status === 403) {
+            document.getElementById('clusterStatus').innerHTML = '<div style="color: #7f8c8d; text-align: center; padding: 0.5rem;">Authentication required</div>';
+            return;
+        }
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Failed to load cluster status' }));
+            throw new Error(errorData.error || 'Failed to load cluster status');
+        }
+        
+        const status = await response.json();
+        const statusEl = document.getElementById('clusterStatus');
+        const modalContentEl = document.getElementById('replicaSetStatusContent');
+        
+        if (!status.isReplicaSet && status.isReplicaSet !== undefined) {
+            // Not a replica set
+            statusEl.innerHTML = '<div style="color: #7f8c8d; text-align: center; padding: 0.5rem;">Single node (no replica set)</div>';
+            if (modalContentEl) {
+                modalContentEl.innerHTML = '<div style="text-align: center; padding: 2rem; color: #7f8c8d;">This MongoDB instance is not configured as a replica set.</div>';
+            }
+            return;
+        }
+        
+        if (!status.members || !Array.isArray(status.members)) {
+            statusEl.innerHTML = '<div style="color: #7f8c8d; text-align: center; padding: 0.5rem;">Loading cluster status...</div>';
+            return;
+        }
+        
+        // Render sidebar status (compact)
+        renderSidebarClusterStatus(status);
+        
+        // Render modal content (detailed) if modal is open
+        if (modalContentEl && document.getElementById('replicaSetModal').style.display === 'block') {
+            renderDetailedClusterStatus(status);
+        }
+        
+    } catch (error) {
+        console.error('Error loading replica set status:', error);
+        document.getElementById('clusterStatus').innerHTML = `<div style="color: #e74c3c; text-align: center; padding: 0.5rem; font-size: 0.8rem;">Error: ${error.message}</div>`;
+    }
+}
+
+function renderSidebarClusterStatus(status) {
+    const statusEl = document.getElementById('clusterStatus');
+    const primary = status.members.find(m => m.stateStr === 'PRIMARY');
+    const secondaries = status.members.filter(m => m.stateStr === 'SECONDARY');
+    const other = status.members.filter(m => m.stateStr !== 'PRIMARY' && m.stateStr !== 'SECONDARY');
+    
+    let html = '';
+    
+    if (primary) {
+        html += `<div style="margin-bottom: 0.75rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                <span style="color: #27ae60; font-weight: bold;">●</span>
+                <span style="font-weight: 500;">Primary</span>
+            </div>
+            <div style="font-size: 0.75rem; color: #7f8c8d; margin-left: 1.5rem; word-break: break-all;">${primary.name}</div>
+        </div>`;
+    }
+    
+    if (secondaries.length > 0) {
+        html += `<div style="margin-bottom: 0.75rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                <span style="color: #3498db;">●</span>
+                <span style="font-weight: 500;">Secondaries (${secondaries.length})</span>
+            </div>`;
+        secondaries.forEach(secondary => {
+            const healthIcon = secondary.health === 1 ? '✓' : '✗';
+            const healthColor = secondary.health === 1 ? '#27ae60' : '#e74c3c';
+            html += `<div style="font-size: 0.75rem; color: #7f8c8d; margin-left: 1.5rem; margin-bottom: 0.25rem;">
+                <span style="color: ${healthColor};">${healthIcon}</span> ${secondary.name}
+            </div>`;
+        });
+        html += `</div>`;
+    }
+    
+    if (other.length > 0) {
+        html += `<div style="margin-bottom: 0.75rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                <span style="color: #95a5a6;">●</span>
+                <span style="font-weight: 500;">Other (${other.length})</span>
+            </div>`;
+        other.forEach(member => {
+            html += `<div style="font-size: 0.75rem; color: #7f8c8d; margin-left: 1.5rem; margin-bottom: 0.25rem;">
+                ${member.name} (${member.stateStr})
+            </div>`;
+        });
+        html += `</div>`;
+    }
+    
+    html += `<button class="btn btn-secondary" onclick="showReplicaSetModal()" style="width: 100%; margin-top: 0.5rem; padding: 0.4rem; font-size: 0.8rem;">View Details</button>`;
+    
+    statusEl.innerHTML = html;
+}
+
+async function renderDetailedClusterStatus(status) {
+    const modalContentEl = document.getElementById('replicaSetStatusContent');
+    
+    // Get replication lag info
+    let lagInfo = null;
+    try {
+        const lagResponse = await fetch(`${API_BASE}/replica-set/replication-lag`, { credentials: 'include' });
+        if (lagResponse.ok) {
+            lagInfo = await lagResponse.json();
+        }
+    } catch (error) {
+        console.error('Error loading replication lag:', error);
+    }
+    
+    // Get isMaster info
+    let isMaster = null;
+    try {
+        const isMasterResponse = await fetch(`${API_BASE}/replica-set/ismaster`, { credentials: 'include' });
+        if (isMasterResponse.ok) {
+            isMaster = await isMasterResponse.json();
+        }
+    } catch (error) {
+        console.error('Error loading isMaster:', error);
+    }
+    
+    let html = '<div style="margin-bottom: 1.5rem;">';
+    html += `<div style="background: #e8f5e9; border-left: 4px solid #27ae60; padding: 1rem; margin-bottom: 1rem; border-radius: 4px;">`;
+    html += `<strong>Replica Set:</strong> ${status.set || 'N/A'}<br>`;
+    html += `<strong>Primary:</strong> ${status.members.find(m => m.stateStr === 'PRIMARY')?.name || 'None'}<br>`;
+    html += `<strong>Members:</strong> ${status.members.length}`;
+    html += `</div>`;
+    
+    html += '<h4 style="margin-bottom: 0.75rem; color: #2c3e50;">Cluster Members</h4>';
+    html += '<div style="display: grid; gap: 1rem;">';
+    
+    status.members.forEach(member => {
+        const isPrimary = member.stateStr === 'PRIMARY';
+        const isSecondary = member.stateStr === 'SECONDARY';
+        const isHealthy = member.health === 1;
+        
+        const stateColor = isPrimary ? '#27ae60' : (isSecondary ? '#3498db' : '#95a5a6');
+        const healthColor = isHealthy ? '#27ae60' : '#e74c3c';
+        const healthIcon = isHealthy ? '✓' : '✗';
+        
+        html += `<div style="border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem; background: white;">`;
+        html += `<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">`;
+        html += `<div>`;
+        html += `<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">`;
+        html += `<span style="color: ${stateColor}; font-size: 1.2rem; font-weight: bold;">●</span>`;
+        html += `<strong style="font-size: 1.1rem;">${member.name}</strong>`;
+        html += `</div>`;
+        html += `<div style="margin-left: 1.75rem; font-size: 0.9rem; color: #7f8c8d;">`;
+        html += `<div><strong>State:</strong> <span style="color: ${stateColor}; font-weight: 600;">${member.stateStr}</span></div>`;
+        html += `<div><strong>Health:</strong> <span style="color: ${healthColor};">${healthIcon} ${isHealthy ? 'Healthy' : 'Unhealthy'}</span></div>`;
+        if (member.uptime) {
+            const uptimeHours = Math.floor(member.uptime / 3600);
+            const uptimeDays = Math.floor(uptimeHours / 24);
+            html += `<div><strong>Uptime:</strong> ${uptimeDays > 0 ? uptimeDays + 'd ' : ''}${uptimeHours % 24}h</div>`;
+        }
+        html += `</div>`;
+        html += `</div>`;
+        
+        // Add replication lag info if available
+        if (lagInfo && lagInfo.members) {
+            const memberLag = lagInfo.members.find(m => m.name === member.name);
+            if (memberLag && memberLag.lagSeconds !== null && memberLag.lagSeconds !== undefined) {
+                const lagColor = memberLag.lagSeconds < 5 ? '#27ae60' : (memberLag.lagSeconds < 30 ? '#f39c12' : '#e74c3c');
+                html += `<div style="margin-left: 1.75rem; margin-top: 0.5rem;">`;
+                html += `<strong>Replication Lag:</strong> <span style="color: ${lagColor}; font-weight: 600;">${memberLag.lagSeconds}s</span>`;
+                html += `</div>`;
+            }
+        }
+        
+        // Add priority if available
+        if (member.priority !== undefined) {
+            html += `<div style="margin-left: 1.75rem; margin-top: 0.5rem; font-size: 0.85rem; color: #7f8c8d;">`;
+            html += `<strong>Priority:</strong> ${member.priority}`;
+            html += `</div>`;
+        }
+        
+        html += `</div>`;
+        html += `</div>`;
+    });
+    
+    html += `</div>`;
+    
+    // Add isMaster info if available
+    if (isMaster) {
+        html += '<h4 style="margin-top: 1.5rem; margin-bottom: 0.75rem; color: #2c3e50;">Connection Info</h4>';
+        html += `<div style="background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 4px; padding: 1rem;">`;
+        html += `<div><strong>Is Master:</strong> ${isMaster.ismaster ? 'Yes' : 'No'}</div>`;
+        if (isMaster.primary) {
+            html += `<div><strong>Primary:</strong> ${isMaster.primary}</div>`;
+        }
+        if (isMaster.hosts && Array.isArray(isMaster.hosts)) {
+            html += `<div><strong>Hosts:</strong> ${isMaster.hosts.join(', ')}</div>`;
+        }
+        html += `</div>`;
+    }
+    
+    html += `</div>`;
+    
+    modalContentEl.innerHTML = html;
+}
+
+function showReplicaSetModal() {
+    document.getElementById('replicaSetModal').style.display = 'block';
+    loadReplicaSetStatus(); // Refresh when opening modal
+}
+
+function closeReplicaSetModal() {
+    document.getElementById('replicaSetModal').style.display = 'none';
+    if (clusterAutoRefreshInterval) {
+        clearInterval(clusterAutoRefreshInterval);
+        clusterAutoRefreshInterval = null;
+    }
+    const checkbox = document.getElementById('autoRefreshCluster');
+    if (checkbox) checkbox.checked = false;
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const replicaSetModal = document.getElementById('replicaSetModal');
+    if (event.target === replicaSetModal) {
+        closeReplicaSetModal();
+    }
+    
+    const loginModal = document.getElementById('loginModal');
+    if (event.target === loginModal) {
+        closeLoginModal();
+    }
+    
+    const addDocumentModal = document.getElementById('addDocumentModal');
+    if (event.target === addDocumentModal) {
+        closeModal();
+    }
+    
+    const editDocumentModal = document.getElementById('editDocumentModal');
+    if (event.target === editDocumentModal) {
+        closeEditModal();
+    }
+    
+    const createDatabaseModal = document.getElementById('createDatabaseModal');
+    if (event.target === createDatabaseModal) {
+        closeCreateDatabaseModal();
+    }
+    
+    const importDatabaseModal = document.getElementById('importDatabaseModal');
+    if (event.target === importDatabaseModal) {
+        closeImportModal();
+    }
+}
+
+function toggleClusterAutoRefresh() {
+    const checkbox = document.getElementById('autoRefreshCluster');
+    if (checkbox.checked) {
+        clusterAutoRefreshInterval = setInterval(loadReplicaSetStatus, 5000);
+    } else {
+        if (clusterAutoRefreshInterval) {
+            clearInterval(clusterAutoRefreshInterval);
+            clusterAutoRefreshInterval = null;
+        }
     }
 }
 

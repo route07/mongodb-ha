@@ -32,6 +32,15 @@
                     <button class="btn btn-secondary" onclick="loadDatabases()" style="width: 100%; margin-bottom: 1rem;">Refresh</button>
                     <ul id="databaseList" class="list"></ul>
                 </div>
+                <div class="sidebar-section" style="margin-top: 1.5rem; border-top: 1px solid #e0e0e0; padding-top: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2 style="margin: 0; font-size: 1rem;">Cluster Status</h2>
+                        <button class="btn btn-secondary" onclick="loadReplicaSetStatus()" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" title="Refresh cluster status">🔄</button>
+                    </div>
+                    <div id="clusterStatus" style="font-size: 0.85rem;">
+                        <div style="color: #7f8c8d; text-align: center; padding: 0.5rem;">Loading...</div>
+                    </div>
+                </div>
             </aside>
 
             <main class="content-area">
@@ -146,6 +155,26 @@
                         Make sure you have MetaMask or another Web3 wallet installed and unlocked.
                     </small>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Replica Set Status Modal -->
+    <div id="replicaSetModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3>🔄 Replica Set Cluster Status</h3>
+                <span class="close" onclick="closeReplicaSetModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 1rem;">
+                    <button class="btn btn-secondary" onclick="loadReplicaSetStatus()" style="margin-right: 0.5rem;">🔄 Refresh</button>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" id="autoRefreshCluster" onchange="toggleClusterAutoRefresh()" style="cursor: pointer;">
+                        <span>Auto-refresh (5s)</span>
+                    </label>
+                </div>
+                <div id="replicaSetStatusContent"></div>
             </div>
         </div>
     </div>

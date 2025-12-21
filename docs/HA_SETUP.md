@@ -35,7 +35,7 @@ The HA setup converts your single MongoDB instance into a **3-node replica set**
 
 ## Quick Start
 
-### 1. Regenerate TLS Certificates
+### 1. Generate TLS Certificates and KeyFile
 
 The TLS certificates must include all replica set member hostnames. Regenerate them:
 
@@ -48,6 +48,14 @@ This will create certificates with Subject Alternative Names (SANs) for:
 - `mongodb-secondary-1`
 - `mongodb-secondary-2`
 - `localhost`
+
+**Generate the keyFile** (required for replica set authentication when authorization is enabled):
+
+```bash
+./scripts/generate-keyfile.sh
+```
+
+The keyFile is used for inter-node authentication in the replica set. It must be the same on all nodes.
 
 ### 2. Configure Environment Variables
 
@@ -397,7 +405,7 @@ For environments with limited resources, use an arbiter instead of a full second
 3. **Limit network exposure**: Only expose primary port externally
 4. **Use firewall rules** to restrict access
 5. **Enable audit logging** for production
-6. **Use keyfile authentication** for replica set members (advanced)
+6. **Keyfile authentication** is automatically configured for replica set members (required when authorization is enabled)
 
 ## Backup and Recovery
 

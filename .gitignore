@@ -7,6 +7,9 @@ tls-certs/
 
 # Database data
 db_data/
+# Replica set data directories (HA setup)
+db_data_primary/
+db_data_secondary*/
 
 # Export files
 *_export_*.json

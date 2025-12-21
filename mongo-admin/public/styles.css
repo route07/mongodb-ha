@@ -395,3 +395,48 @@ code {
     font-size: 0.9em;
     color: #c7254e;
 }
+
+/* Cluster Status Styles */
+.sidebar-section {
+    margin-bottom: 1rem;
+}
+
+.cluster-member-card {
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 1rem;
+    background: white;
+    transition: box-shadow 0.2s;
+}
+
+.cluster-member-card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.cluster-status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.cluster-status-badge.primary {
+    background: #d4edda;
+    color: #155724;
+}
+
+.cluster-status-badge.secondary {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.cluster-status-badge.healthy {
+    background: #d4edda;
+    color: #155724;
+}
+
+.cluster-status-badge.unhealthy {
+    background: #f8d7da;
+    color: #721c24;
+}
