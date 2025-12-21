@@ -108,6 +108,11 @@ async function connectToMongoDB() {
       options.replicaSet = replicaSet;
       // For replica sets, prefer reading from primary but allow secondary reads
       options.readPreference = 'primaryPreferred';
+      // Set server selection timeout and retry
+      options.serverSelectionTimeoutMS = 5000; // Reduced from default 30s
+      options.connectTimeoutMS = 10000;
+      // Allow connection even if replica set isn't fully initialized
+      options.directConnection = false;
     }
 
     // TLS configuration
@@ -160,12 +165,85 @@ async function connectToMongoDB() {
     console.log('TLS allow invalid certs:', process.env.MONGO_TLS_ALLOW_INVALID === 'true');
     
     mongoClient = new MongoClient(mongoUrl, options);
-    await mongoClient.connect();
     
-    // Test connection
-    await mongoClient.db('admin').command({ ping: 1 });
-    console.log('✓ Connected to MongoDB with TLS');
-    return mongoClient;
+    // Try to connect with replica set first
+    try {
+      await mongoClient.connect();
+      // Test connection
+      await mongoClient.db('admin').command({ ping: 1 });
+      console.log('✓ Connected to MongoDB with TLS');
+      return mongoClient;
+    } catch (replicaSetError) {
+      // If replica set connection fails and we're using replica set, try single node fallback
+      const errorMsg = replicaSetError.message || '';
+      const errorName = replicaSetError.name || '';
+      if (replicaSet && (
+          errorMsg.includes('ReplicaSetNoPrimary') || 
+          errorMsg.includes('Server selection timed out') ||
+          errorMsg.includes('topology is closed') ||
+          errorMsg.includes('ReplicaSetNoPrimary') ||
+          errorName.includes('MongoServerSelectionError') ||
+          errorName.includes('MongoTimeoutError')
+      )) {
+        console.log('⚠ Replica set not initialized or no primary available');
+        console.log('Falling back to single node connection...');
+        
+        // Close the failed connection
+        try {
+          await mongoClient.close();
+        } catch (e) {
+          // Ignore close errors
+        }
+        
+        // Try single node connection
+        const singleNodeUrl = `mongodb://${username}:${password}@${host}:${port}/?authSource=admin`;
+        const singleNodeOptions = {
+          authSource: 'admin',
+          // Remove all replica set related options
+          replicaSet: undefined,
+          readPreference: undefined,
+          serverSelectionTimeoutMS: 10000, // Give it more time
+          connectTimeoutMS: 10000,
+        };
+        
+        // Copy TLS options
+        if (process.env.MONGO_TLS === 'true') {
+          singleNodeOptions.tls = true;
+          singleNodeOptions.tlsAllowInvalidCertificates = process.env.MONGO_TLS_ALLOW_INVALID === 'true';
+          if (process.env.MONGO_TLS_CA_FILE) {
+            try {
+              if (fs.existsSync(process.env.MONGO_TLS_CA_FILE)) {
+                singleNodeOptions.tlsCAFile = process.env.MONGO_TLS_CA_FILE;
+                const caCert = fs.readFileSync(process.env.MONGO_TLS_CA_FILE, 'utf8');
+                singleNodeOptions.ca = [caCert];
+              }
+            } catch (err) {
+              console.warn('Error reading CA file for fallback:', err.message);
+            }
+          }
+        }
+        
+        mongoClient = new MongoClient(singleNodeUrl, singleNodeOptions);
+        try {
+          await mongoClient.connect();
+          await mongoClient.db('admin').command({ ping: 1 });
+          console.log('✓ Connected to MongoDB (single node mode - replica set not initialized)');
+          return mongoClient;
+        } catch (singleNodeError) {
+          console.error('✗ Single node connection also failed:', singleNodeError.message);
+          // Close the failed connection
+          try {
+            await mongoClient.close();
+          } catch (e) {
+            // Ignore close errors
+          }
+          // Re-throw the original replica set error
+          throw replicaSetError;
+        }
+      }
+      // Re-throw if it's a different error
+      throw replicaSetError;
+    }
   } catch (error) {
     console.error('✗ MongoDB connection error:', error.message);
     if (error.stack) {
