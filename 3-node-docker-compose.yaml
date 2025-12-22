@@ -69,6 +69,40 @@ services:
       mongodb-primary:
         condition: service_healthy
 
+  # MongoDB Secondary Node 2
+  mongodb-secondary-2:
+    image: mongo:7.0
+    container_name: mongo-secondary-2
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    volumes:
+      - ./db_data_secondary2:/data/db
+      - ./tls-certs:/etc/mongo/ssl:ro
+      - ./scripts:/scripts:ro
+    entrypoint: ["bash", "/scripts/fix-keyfile-permissions.sh"]
+    command: >
+      mongod
+      --replSet ${REPLICA_SET_NAME:-rs0}
+      --keyFile /etc/mongo/ssl/keyfile
+      --tlsMode requireTLS
+      --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
+      --tlsCAFile /etc/mongo/ssl/ca.crt
+      --tlsAllowConnectionsWithoutCertificates
+      --bind_ip_all
+    networks:
+      - db-network
+    healthcheck:
+      test: ["CMD", "bash", "/scripts/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      mongodb-primary:
+        condition: service_healthy
+
   # Replica Set Initialization Service
   mongodb-init:
     image: mongo:7.0
