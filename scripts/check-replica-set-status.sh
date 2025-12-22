@@ -26,9 +26,28 @@ echo "-------------------------------------------"
 docker-compose ps | grep mongodb
 echo ""
 
-echo "2. Checking replica set status..."
+echo "2. Finding available MongoDB node..."
 echo "-------------------------------------------"
-docker exec mongo-primary mongosh --tls \
+# Try to find a running MongoDB container
+MONGO_CONTAINER=""
+for container in mongo-primary mongodb-secondary-1 mongodb-secondary-2; do
+    if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
+        MONGO_CONTAINER="$container"
+        echo "✓ Found running container: $container"
+        break
+    fi
+done
+
+if [ -z "$MONGO_CONTAINER" ]; then
+    echo "❌ No MongoDB containers are running"
+    echo "   Start containers: docker-compose up -d"
+    exit 1
+fi
+
+echo ""
+echo "3. Checking replica set status..."
+echo "-------------------------------------------"
+docker exec "$MONGO_CONTAINER" mongosh --tls \
   --tlsAllowInvalidCertificates \
   --tlsCAFile /etc/mongo/ssl/ca.crt \
   -u "$MONGO_INITDB_ROOT_USERNAME" \
@@ -42,21 +61,31 @@ docker exec mongo-primary mongosh --tls \
       print('');
       print('Members:');
       var hasPrimary = false;
+      var primaryName = '';
       status.members.forEach(function(m) {
         var health = m.health === 1 ? '✓ healthy' : '✗ unhealthy';
         var state = m.stateStr;
         if (state === 'PRIMARY') {
           hasPrimary = true;
+          primaryName = m.name;
           state = 'PRIMARY ⭐';
         }
+        var containerStatus = '';
+        try {
+          // Check if container is running (this won't work from inside, but we'll show the state)
+        } catch(e) {}
         print('  ' + m.name + ': ' + state + ' (' + health + ')');
       });
       print('');
       if (hasPrimary) {
-        print('✅ Primary node is active');
+        print('✅ Primary node is active: ' + primaryName);
       } else {
         print('⚠️  No primary node found');
-        print('   This is normal after restart - waiting 30-60 seconds...');
+        print('   This can happen if:');
+        print('   - Primary container is stopped');
+        print('   - Replica set is re-electing (wait 30-60 seconds)');
+        print('   - Network issues between nodes');
+        print('');
         print('   If it persists, run: ./scripts/fix-replica-set.sh');
       }
     } catch(e) {
@@ -70,14 +99,14 @@ docker exec mongo-primary mongosh --tls \
   " 2>/dev/null
 
 if [ $? -ne 0 ]; then
-    echo "⚠️  Failed to connect to MongoDB"
-    echo "   Make sure containers are running: docker-compose ps"
+    echo "⚠️  Failed to connect to MongoDB via $MONGO_CONTAINER"
+    echo "   Check container logs: docker logs $MONGO_CONTAINER"
 fi
 
 echo ""
-echo "3. Checking isMaster..."
+echo "4. Checking isMaster on $MONGO_CONTAINER..."
 echo "-------------------------------------------"
-docker exec mongo-primary mongosh --tls \
+docker exec "$MONGO_CONTAINER" mongosh --tls \
   --tlsAllowInvalidCertificates \
   --tlsCAFile /etc/mongo/ssl/ca.crt \
   -u "$MONGO_INITDB_ROOT_USERNAME" \
@@ -89,6 +118,10 @@ docker exec mongo-primary mongosh --tls \
     print('Is Primary: ' + (result.ismaster ? 'YES ✅' : 'NO ❌'));
     print('Set Name: ' + (result.setName || 'N/A'));
     print('Primary: ' + (result.primary || 'N/A'));
+    if (!result.ismaster && result.primary) {
+      print('');
+      print('ℹ️  This node is not primary. Primary is: ' + result.primary);
+    }
   " 2>/dev/null
 
 echo ""
