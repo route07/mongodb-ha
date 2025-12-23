@@ -89,8 +89,6 @@ services:
         condition: service_healthy
       mongodb-secondary-1:
         condition: service_healthy
-      mongodb-secondary-2:
-        condition: service_healthy
 
   ## Custom MongoDB Admin UI (with TLS and Replica Set support)
   mongo-admin:
@@ -120,10 +118,8 @@ services:
         condition: service_healthy
       mongodb-secondary-1:
         condition: service_healthy
-      mongodb-secondary-2:
-        condition: service_healthy
-      mongodb-init:
-        condition: service_completed_successfully
+     #mongodb-init:
+     #   condition: service_completed_successfully
     networks:
       - db-network
 
