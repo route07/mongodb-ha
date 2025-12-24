@@ -126,7 +126,14 @@ mongosh "mongodb://username:password@localhost:27017,localhost:27018,localhost:2
 mongosh "mongodb://username:password@localhost:27017/?replicaSet=rs0&tls=true&tlsCAFile=./tls-certs/ca.crt&tlsAllowInvalidCertificates=true&authSource=admin"
 ```
 
-**Note**: Secondary ports (27018, 27019) are exposed so clients can connect directly if a secondary becomes primary during failover. The MongoDB driver's automatic discovery will handle primary changes, but having all ports exposed ensures connectivity even if discovery fails.
+**Note**: Secondary ports (27018, 27019) are exposed so clients can:
+1. Connect directly if a secondary becomes primary during failover
+2. Read from secondaries for load distribution (see [Secondary Reads Guide](./docs/SECONDARY_READS.md))
+3. The MongoDB driver's automatic discovery will handle primary changes, but having all ports exposed ensures connectivity even if discovery fails.
+
+**Important**: 
+- Clients can **read** from secondaries (with `readPreference`), but **writes** can only go to the primary. See [SECONDARY_READS.md](./docs/SECONDARY_READS.md) for details.
+- Clients **must use the same CA certificate** (`ca.crt`) as the server. See [TLS_CA_CERTIFICATE.md](./docs/TLS_CA_CERTIFICATE.md) for details.
 
 **See [HA_SETUP.md](./docs/HA_SETUP.md) for complete HA setup guide, migration instructions, and troubleshooting.**
 
@@ -198,6 +205,8 @@ This is a **chicken-and-egg problem**: MongoDB is in replica set mode but not in
    ```
 
 **Expected result**: All nodes should show as `PRIMARY` or `SECONDARY` with health status `1`, and the oplog warnings will disappear.
+
+**Want to test failover?** See [TEST_FAILOVER.md](./docs/TEST_FAILOVER.md) for step-by-step instructions on testing automatic failover.
 
 **Having issues?** Check the [Troubleshooting Guide](./docs/TROUBLESHOOTING.md) for more common problems and solutions.
 

@@ -30,7 +30,7 @@ echo "2. Finding available MongoDB node..."
 echo "-------------------------------------------"
 # Try to find a running MongoDB container
 MONGO_CONTAINER=""
-for container in mongo-primary mongodb-secondary-1 mongodb-secondary-2; do
+for container in mongo-primary mongo-secondary-1 mongo-secondary-2 mongodb-secondary-1 mongodb-secondary-2; do
     if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
         MONGO_CONTAINER="$container"
         echo "✓ Found running container: $container"
@@ -65,10 +65,16 @@ get_exposed_port() {
     mongo-primary)
       echo "${MONGO_PORT:-27017}"
       ;;
-    mongo-secondary-1|mongodb-secondary-1)
+    mongo-secondary-1)
       echo "${MONGO_SECONDARY1_PORT:-27018}"
       ;;
-    mongo-secondary-2|mongodb-secondary-2)
+    mongodb-secondary-1)
+      echo "${MONGO_SECONDARY1_PORT:-27018}"
+      ;;
+    mongo-secondary-2)
+      echo "${MONGO_SECONDARY2_PORT:-27019}"
+      ;;
+    mongodb-secondary-2)
       echo "${MONGO_SECONDARY2_PORT:-27019}"
       ;;
     *)
@@ -77,10 +83,19 @@ get_exposed_port() {
   esac
 }
 
-# Map container names to their exposed ports
+# Map container names to their exposed ports (try both naming conventions)
 PRIMARY_EXPOSED_PORT=$(get_exposed_port "mongo-primary" 27017)
+if [ "$PRIMARY_EXPOSED_PORT" = "27017" ]; then
+  PRIMARY_EXPOSED_PORT=$(get_exposed_port "mongodb-primary" 27017)
+fi
 SECONDARY1_EXPOSED_PORT=$(get_exposed_port "mongo-secondary-1" 27017)
+if [ "$SECONDARY1_EXPOSED_PORT" = "27017" ]; then
+  SECONDARY1_EXPOSED_PORT=$(get_exposed_port "mongodb-secondary-1" 27017)
+fi
 SECONDARY2_EXPOSED_PORT=$(get_exposed_port "mongo-secondary-2" 27017)
+if [ "$SECONDARY2_EXPOSED_PORT" = "27017" ]; then
+  SECONDARY2_EXPOSED_PORT=$(get_exposed_port "mongodb-secondary-2" 27017)
+fi
 
 echo ""
 echo "3. Checking replica set status..."
