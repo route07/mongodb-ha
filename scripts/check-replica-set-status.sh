@@ -44,6 +44,44 @@ if [ -z "$MONGO_CONTAINER" ]; then
     exit 1
 fi
 
+# Function to get exposed port for a container
+get_exposed_port() {
+  local container=$1
+  local internal_port=${2:-27017}
+  # Try docker port first
+  local exposed=$(docker port "$container" "$internal_port/tcp" 2>/dev/null | cut -d: -f2)
+  if [ -n "$exposed" ]; then
+    echo "$exposed"
+    return
+  fi
+  # Fallback: try to get from docker-compose ps output
+  local compose_output=$(docker-compose ps --format json 2>/dev/null | grep -A 5 "\"$container\"" | grep -oP '"ports":\s*"[\d.]+:(\d+)"' | head -1 | grep -oP ':\K\d+' || echo "")
+  if [ -n "$compose_output" ]; then
+    echo "$compose_output"
+    return
+  fi
+  # Default fallback based on container name
+  case "$container" in
+    mongo-primary)
+      echo "${MONGO_PORT:-27017}"
+      ;;
+    mongo-secondary-1|mongodb-secondary-1)
+      echo "${MONGO_SECONDARY1_PORT:-27018}"
+      ;;
+    mongo-secondary-2|mongodb-secondary-2)
+      echo "${MONGO_SECONDARY2_PORT:-27019}"
+      ;;
+    *)
+      echo "$internal_port"
+      ;;
+  esac
+}
+
+# Map container names to their exposed ports
+PRIMARY_EXPOSED_PORT=$(get_exposed_port "mongo-primary" 27017)
+SECONDARY1_EXPOSED_PORT=$(get_exposed_port "mongo-secondary-1" 27017)
+SECONDARY2_EXPOSED_PORT=$(get_exposed_port "mongo-secondary-2" 27017)
+
 echo ""
 echo "3. Checking replica set status..."
 echo "-------------------------------------------"
@@ -59,7 +97,7 @@ docker exec "$MONGO_CONTAINER" mongosh --tls \
       var status = rs.status();
       print('Set Name: ' + status.set);
       print('');
-      print('Members:');
+      print('Members (Internal Replica Set Config):');
       var hasPrimary = false;
       var primaryName = '';
       status.members.forEach(function(m) {
@@ -70,10 +108,6 @@ docker exec "$MONGO_CONTAINER" mongosh --tls \
           primaryName = m.name;
           state = 'PRIMARY ⭐';
         }
-        var containerStatus = '';
-        try {
-          // Check if container is running (this won't work from inside, but we'll show the state)
-        } catch(e) {}
         print('  ' + m.name + ': ' + state + ' (' + health + ')');
       });
       print('');
@@ -98,13 +132,24 @@ docker exec "$MONGO_CONTAINER" mongosh --tls \
     }
   " 2>/dev/null
 
+echo ""
+echo "4. External Port Mapping (for client connections):"
+echo "-------------------------------------------"
+echo "  Primary (mongo-primary):     localhost:${PRIMARY_EXPOSED_PORT}"
+echo "  Secondary-1 (mongo-secondary-1): localhost:${SECONDARY1_EXPOSED_PORT}"
+echo "  Secondary-2 (mongo-secondary-2): localhost:${SECONDARY2_EXPOSED_PORT}"
+echo ""
+echo "  Connection String (recommended):"
+echo "  mongodb://user:pass@localhost:${PRIMARY_EXPOSED_PORT},localhost:${SECONDARY1_EXPOSED_PORT},localhost:${SECONDARY2_EXPOSED_PORT}/db?replicaSet=rs0&tls=..."
+echo ""
+
 if [ $? -ne 0 ]; then
     echo "⚠️  Failed to connect to MongoDB via $MONGO_CONTAINER"
     echo "   Check container logs: docker logs $MONGO_CONTAINER"
 fi
 
 echo ""
-echo "4. Checking isMaster on $MONGO_CONTAINER..."
+echo "5. Checking isMaster on $MONGO_CONTAINER..."
 echo "-------------------------------------------"
 docker exec "$MONGO_CONTAINER" mongosh --tls \
   --tlsAllowInvalidCertificates \

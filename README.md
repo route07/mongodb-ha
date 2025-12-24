@@ -112,16 +112,94 @@ This will start:
 - ✅ Data redundancy (3 copies)
 - ✅ Read scaling (read from secondaries)
 - ✅ Zero-downtime maintenance
+- ✅ All nodes exposed (secondary ports: 27018, 27019) - ensures clients can connect even after failover
 
 ### Connection String for HA
 
+**Recommended** (with all members - MongoDB driver will automatically discover and connect to primary):
+```bash
+mongosh "mongodb://username:password@localhost:27017,localhost:27018,localhost:27019/?replicaSet=rs0&tls=true&tlsCAFile=./tls-certs/ca.crt&tlsAllowInvalidCertificates=true&authSource=admin"
+```
+
+**Alternative** (single entry point - driver will discover other members):
 ```bash
 mongosh "mongodb://username:password@localhost:27017/?replicaSet=rs0&tls=true&tlsCAFile=./tls-certs/ca.crt&tlsAllowInvalidCertificates=true&authSource=admin"
 ```
 
+**Note**: Secondary ports (27018, 27019) are exposed so clients can connect directly if a secondary becomes primary during failover. The MongoDB driver's automatic discovery will handle primary changes, but having all ports exposed ensures connectivity even if discovery fails.
+
 **See [HA_SETUP.md](./docs/HA_SETUP.md) for complete HA setup guide, migration instructions, and troubleshooting.**
 
-**Having issues?** Check the [Troubleshooting Guide](./docs/TROUBLESHOOTING.md) for common problems and solutions.
+## Troubleshooting: Primary Node Fails on First Start
+
+If you're starting a new MongoDB HA setup and the primary node fails with errors like:
+
+```
+NamespaceNotFound: Collection [local.oplog.rs] not found
+ReadConcernMajorityNotAvailableYet: Read concern majority reads are currently not possible
+UserNotFound: Could not find user "your_username" for db "admin"
+```
+
+This is a **chicken-and-egg problem**: MongoDB is in replica set mode but not initialized, so it won't accept writes (including user creation), but the initialization script needs authentication.
+
+### Quick Fix
+
+1. **Initialize the replica set first** (works without authentication):
+   ```bash
+   source .env
+   docker exec mongo-primary mongosh --tls \
+     --tlsAllowInvalidCertificates \
+     --tlsCAFile /etc/mongo/ssl/ca.crt \
+     --eval "rs.initiate({_id: '${REPLICA_SET_NAME:-rs0}', members: [{_id: 0, host: 'mongodb-primary:27017'}]})"
+   ```
+
+2. **Wait for primary election** (10 seconds):
+   ```bash
+   sleep 10
+   docker exec mongo-primary mongosh --tls \
+     --tlsAllowInvalidCertificates \
+     --tlsCAFile /etc/mongo/ssl/ca.crt \
+     --eval "rs.isMaster().ismaster"
+   ```
+   Should return: `true`
+
+3. **Create the root user**:
+   ```bash
+   docker exec mongo-primary mongosh --tls \
+     --tlsAllowInvalidCertificates \
+     --tlsCAFile /etc/mongo/ssl/ca.crt \
+     --eval "db.getSiblingDB('admin').createUser({user: '${MONGO_INITDB_ROOT_USERNAME}', pwd: '${MONGO_INITDB_ROOT_PASSWORD}', roles: [{ role: 'root', db: 'admin' }]})"
+   ```
+
+4. **Start and add secondary nodes**:
+   ```bash
+   docker-compose up -d mongodb-secondary-1 mongodb-secondary-2
+   sleep 15
+   
+   docker exec mongo-primary mongosh --tls \
+     --tlsAllowInvalidCertificates \
+     --tlsCAFile /etc/mongo/ssl/ca.crt \
+     -u "${MONGO_INITDB_ROOT_USERNAME}" \
+     -p "${MONGO_INITDB_ROOT_PASSWORD}" \
+     --authenticationDatabase admin \
+     --eval "rs.add('mongodb-secondary-1:27017'); rs.add('mongodb-secondary-2:27017')"
+   ```
+
+5. **Verify everything is working**:
+   ```bash
+   docker-compose ps  # All should be healthy
+   docker exec mongo-primary mongosh --tls \
+     --tlsAllowInvalidCertificates \
+     --tlsCAFile /etc/mongo/ssl/ca.crt \
+     -u "${MONGO_INITDB_ROOT_USERNAME}" \
+     -p "${MONGO_INITDB_ROOT_PASSWORD}" \
+     --authenticationDatabase admin \
+     --eval "rs.status().members.forEach(m => print(m.name + ': ' + m.stateStr))"
+   ```
+
+**Expected result**: All nodes should show as `PRIMARY` or `SECONDARY` with health status `1`, and the oplog warnings will disappear.
+
+**Having issues?** Check the [Troubleshooting Guide](./docs/TROUBLESHOOTING.md) for more common problems and solutions.
 
 ## Stop Services
 

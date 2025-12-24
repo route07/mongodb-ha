@@ -677,6 +677,23 @@ app.post('/api/databases/:dbName/import', requireAuth, upload.single('file'), as
   }
 });
 
+// Helper function to get external port for a container
+function getExternalPort(containerName, internalPort = 27017) {
+  // Map container names to environment variables or defaults
+  const portMap = {
+    'mongodb-primary': process.env.MONGO_PORT || '27017',
+    'mongo-primary': process.env.MONGO_PORT || '27017',
+    'mongodb-secondary-1': process.env.MONGO_SECONDARY1_PORT || '27018',
+    'mongo-secondary-1': process.env.MONGO_SECONDARY1_PORT || '27018',
+    'mongodb-secondary-2': process.env.MONGO_SECONDARY2_PORT || '27019',
+    'mongo-secondary-2': process.env.MONGO_SECONDARY2_PORT || '27019'
+  };
+  
+  // Extract container name from member name (e.g., "mongodb-primary:27017" -> "mongodb-primary")
+  const name = containerName.split(':')[0];
+  return portMap[name] || internalPort.toString();
+}
+
 // Replica Set Status endpoints
 app.get('/api/replica-set/status', requireAuth, async (req, res) => {
   try {
@@ -686,6 +703,22 @@ app.get('/api/replica-set/status', requireAuth, async (req, res) => {
     
     const adminDb = mongoClient.db().admin();
     const status = await adminDb.command({ replSetGetStatus: 1 });
+    
+    // Add external port mapping to each member
+    if (status.members && Array.isArray(status.members)) {
+      status.members = status.members.map(member => {
+        const memberName = member.name || '';
+        const internalPort = memberName.includes(':') ? memberName.split(':')[1] : '27017';
+        const containerName = memberName.split(':')[0];
+        const externalPort = getExternalPort(containerName, internalPort);
+        
+        return {
+          ...member,
+          externalPort: externalPort,
+          externalAddress: `localhost:${externalPort}`
+        };
+      });
+    }
     
     res.json(status);
   } catch (error) {

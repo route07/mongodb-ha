@@ -754,9 +754,14 @@ function renderSidebarClusterStatus(status) {
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
                 <span style="color: #27ae60; font-weight: bold;">●</span>
                 <span style="font-weight: 500;">Primary</span>
-            </div>
-            <div style="font-size: 0.75rem; color: #7f8c8d; margin-left: 1.5rem; word-break: break-all;">${primary.name}</div>
-        </div>`;
+            </div>`;
+        if (primary.externalAddress) {
+            html += `<div style="font-size: 0.7rem; color: #7f8c8d; margin-left: 1.5rem; margin-bottom: 0.15rem; word-break: break-all;">Internal: ${primary.name}</div>`;
+            html += `<div style="font-size: 0.7rem; color: #1976d2; margin-left: 1.5rem; word-break: break-all;">External: ${primary.externalAddress}</div>`;
+        } else {
+            html += `<div style="font-size: 0.75rem; color: #7f8c8d; margin-left: 1.5rem; word-break: break-all;">${primary.name}</div>`;
+        }
+        html += `</div>`;
     }
     
     if (secondaries.length > 0) {
@@ -768,9 +773,15 @@ function renderSidebarClusterStatus(status) {
         secondaries.forEach(secondary => {
             const healthIcon = secondary.health === 1 ? '✓' : '✗';
             const healthColor = secondary.health === 1 ? '#27ae60' : '#e74c3c';
-            html += `<div style="font-size: 0.75rem; color: #7f8c8d; margin-left: 1.5rem; margin-bottom: 0.25rem;">
-                <span style="color: ${healthColor};">${healthIcon}</span> ${secondary.name}
-            </div>`;
+            html += `<div style="font-size: 0.7rem; margin-left: 1.5rem; margin-bottom: 0.25rem;">`;
+            html += `<div style="color: ${healthColor}; margin-bottom: 0.1rem;"><span>${healthIcon}</span>`;
+            if (secondary.externalAddress) {
+                html += ` <span style="color: #7f8c8d;">Internal: ${secondary.name}</span></div>`;
+                html += `<div style="color: #1976d2; margin-left: 1rem;">External: ${secondary.externalAddress}</div>`;
+            } else {
+                html += ` ${secondary.name}</div>`;
+            }
+            html += `</div>`;
         });
         html += `</div>`;
     }
@@ -782,9 +793,14 @@ function renderSidebarClusterStatus(status) {
                 <span style="font-weight: 500;">Other (${other.length})</span>
             </div>`;
         other.forEach(member => {
-            html += `<div style="font-size: 0.75rem; color: #7f8c8d; margin-left: 1.5rem; margin-bottom: 0.25rem;">
-                ${member.name} (${member.stateStr})
-            </div>`;
+            html += `<div style="font-size: 0.7rem; margin-left: 1.5rem; margin-bottom: 0.25rem;">`;
+            if (member.externalAddress) {
+                html += `<div style="color: #7f8c8d;">Internal: ${member.name} (${member.stateStr})</div>`;
+                html += `<div style="color: #1976d2;">External: ${member.externalAddress}</div>`;
+            } else {
+                html += `<div style="color: #7f8c8d;">${member.name} (${member.stateStr})</div>`;
+            }
+            html += `</div>`;
         });
         html += `</div>`;
     }
@@ -848,6 +864,13 @@ async function renderDetailedClusterStatus(status) {
         html += `<div style="margin-left: 1.75rem; font-size: 0.9rem; color: #7f8c8d;">`;
         html += `<div><strong>State:</strong> <span style="color: ${stateColor}; font-weight: 600;">${member.stateStr}</span></div>`;
         html += `<div><strong>Health:</strong> <span style="color: ${healthColor};">${healthIcon} ${isHealthy ? 'Healthy' : 'Unhealthy'}</span></div>`;
+        // Add external port information
+        if (member.externalAddress) {
+          html += `<div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #e0e0e0;">`;
+          html += `<div style="font-size: 0.85rem;"><strong>Internal (Replica Set):</strong> <code style="background: #f5f5f5; padding: 0.2rem 0.4rem; border-radius: 3px;">${member.name}</code></div>`;
+          html += `<div style="font-size: 0.85rem; margin-top: 0.25rem;"><strong>External (Client):</strong> <code style="background: #e3f2fd; padding: 0.2rem 0.4rem; border-radius: 3px; color: #1976d2;">${member.externalAddress}</code></div>`;
+          html += `</div>`;
+        }
         if (member.uptime) {
             const uptimeHours = Math.floor(member.uptime / 3600);
             const uptimeDays = Math.floor(uptimeHours / 24);
