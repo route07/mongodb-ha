@@ -57,6 +57,16 @@
                             <button class="btn btn-primary" onclick="showAddDocumentModal()">Add Document</button>
                         </div>
                     </div>
+                    <div class="search-container" style="margin: 1rem 0; padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="text" id="searchInput" placeholder="Search documents (e.g., 'field:value' or 'text')" 
+                                   style="flex: 1; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;"
+                                   onkeypress="if(event.key === 'Enter') performSearch()">
+                            <button class="btn btn-primary" onclick="performSearch()" style="padding: 0.75rem 1.5rem;">Search</button>
+                            <button class="btn btn-secondary" onclick="clearSearch()" style="padding: 0.75rem 1rem;">Clear</button>
+                        </div>
+                        <div id="searchInfo" style="margin-top: 0.5rem; font-size: 0.85rem; color: #7f8c8d; display: none;"></div>
+                    </div>
                     <div class="documents-container">
                         <div id="documentsList"></div>
                         <div class="pagination" id="pagination"></div>

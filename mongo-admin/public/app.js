@@ -304,16 +304,24 @@ async function loadCollections(dbName) {
 }
 
 // Load documents from a collection
-async function loadDocuments(dbName, collectionName, page = 0) {
+async function loadDocuments(dbName, collectionName, page = 0, searchQuery = null) {
     try {
         currentDb = dbName;
         currentCollection = collectionName;
         currentPage = page;
         
-        const response = await fetch(
-            `${API_BASE}/databases/${dbName}/collections/${collectionName}/documents?limit=${pageSize}&skip=${page * pageSize}`,
-            { credentials: 'include' }
-        );
+        // Get search query from input if not provided
+        if (searchQuery === null) {
+            const searchInput = document.getElementById('searchInput');
+            searchQuery = searchInput ? searchInput.value.trim() : '';
+        }
+        
+        let url = `${API_BASE}/databases/${dbName}/collections/${collectionName}/documents?limit=${pageSize}&skip=${page * pageSize}`;
+        if (searchQuery) {
+            url += `&search=${encodeURIComponent(searchQuery)}`;
+        }
+        
+        const response = await fetch(url, { credentials: 'include' });
         
         if (response.status === 401 || response.status === 403) {
             const data = await response.json().catch(() => ({ requiresAuth: true }));
@@ -339,12 +347,32 @@ async function loadDocuments(dbName, collectionName, page = 0) {
         document.getElementById('collectionView').style.display = 'block';
         document.getElementById('collectionTitle').textContent = `${dbName}.${collectionName}`;
         
+        // Update search input
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.value = searchQuery || '';
+        }
+        
+        // Update search info
+        const searchInfo = document.getElementById('searchInfo');
+        if (searchInfo) {
+            if (searchQuery) {
+                searchInfo.style.display = 'block';
+                searchInfo.textContent = `Found ${data.total} document(s) matching "${searchQuery}"`;
+            } else {
+                searchInfo.style.display = 'none';
+            }
+        }
+        
         // Display documents
         const container = document.getElementById('documentsList');
         if (data.documents.length === 0) {
-            container.innerHTML = '<div class="empty-state">No documents found</div>';
+            const message = searchQuery 
+                ? `<div class="empty-state">No documents found matching "${searchQuery}"</div>`
+                : '<div class="empty-state">No documents found</div>';
+            container.innerHTML = message;
         } else {
-            container.innerHTML = data.documents.map(doc => createDocumentCard(doc)).join('');
+            container.innerHTML = data.documents.map(doc => createDocumentCard(doc, searchQuery)).join('');
         }
         
         // Update pagination
@@ -356,15 +384,33 @@ async function loadDocuments(dbName, collectionName, page = 0) {
 }
 
 // Create document card HTML
-function createDocumentCard(doc) {
+function createDocumentCard(doc, searchQuery = null) {
     const docStr = JSON.stringify(doc, null, 2);
     const docId = doc._id.$oid || doc._id;
+    
+    // Highlight search terms if provided
+    let highlightedContent = escapeHtml(docStr);
+    if (searchQuery && searchQuery.trim()) {
+        const searchTerm = searchQuery.trim();
+        // Extract value if it's field:value format
+        const searchValue = searchTerm.includes(':') ? searchTerm.split(':')[1].trim() : searchTerm;
+        if (searchValue) {
+            const regex = new RegExp(`(${escapeRegex(searchValue)})`, 'gi');
+            highlightedContent = highlightedContent.replace(regex, '<mark style="background-color: #ffeb3b; padding: 0.1em 0.2em; border-radius: 2px;">$1</mark>');
+        }
+    }
+    
     return `
         <div class="document-card" onclick="showEditModal('${docId}')">
             <div class="document-id">ID: ${docId}</div>
-            <div class="document-content">${escapeHtml(docStr)}</div>
+            <div class="document-content">${highlightedContent}</div>
         </div>
     `;
+}
+
+// Helper to escape regex special characters
+function escapeRegex(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // Show edit document modal
@@ -417,7 +463,9 @@ async function saveDocument() {
         
         if (response.ok) {
             closeModal();
-            loadDocuments(currentDb, currentCollection, currentPage);
+            const searchInput = document.getElementById('searchInput');
+            const searchQuery = searchInput ? searchInput.value.trim() : '';
+            loadDocuments(currentDb, currentCollection, currentPage, searchQuery);
         } else {
             const error = await response.json();
             showError('Failed to save document: ' + error.error);
@@ -446,7 +494,9 @@ async function updateDocument() {
         
         if (response.ok) {
             closeEditModal();
-            loadDocuments(currentDb, currentCollection, currentPage);
+            const searchInput = document.getElementById('searchInput');
+            const searchQuery = searchInput ? searchInput.value.trim() : '';
+            loadDocuments(currentDb, currentCollection, currentPage, searchQuery);
         } else {
             const error = await response.json();
             showError('Failed to update document: ' + error.error);
@@ -471,7 +521,9 @@ async function deleteDocument() {
         
         if (response.ok) {
             closeEditModal();
-            loadDocuments(currentDb, currentCollection, currentPage);
+            const searchInput = document.getElementById('searchInput');
+            const searchQuery = searchInput ? searchInput.value.trim() : '';
+            loadDocuments(currentDb, currentCollection, currentPage, searchQuery);
         } else {
             const error = await response.json();
             showError('Failed to delete document: ' + error.error);
@@ -483,7 +535,31 @@ async function deleteDocument() {
 
 // Refresh documents
 function refreshDocuments() {
-    loadDocuments(currentDb, currentCollection, currentPage);
+    const searchInput = document.getElementById('searchInput');
+    const searchQuery = searchInput ? searchInput.value.trim() : '';
+    loadDocuments(currentDb, currentCollection, currentPage, searchQuery);
+}
+
+// Perform search
+function performSearch() {
+    const searchInput = document.getElementById('searchInput');
+    const searchQuery = searchInput ? searchInput.value.trim() : '';
+    // Reset to first page when searching
+    loadDocuments(currentDb, currentCollection, 0, searchQuery);
+}
+
+// Clear search
+function clearSearch() {
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    const searchInfo = document.getElementById('searchInfo');
+    if (searchInfo) {
+        searchInfo.style.display = 'none';
+    }
+    // Reload without search
+    loadDocuments(currentDb, currentCollection, 0, '');
 }
 
 // Delete collection
@@ -525,11 +601,14 @@ async function deleteCollection(dbName, collectionName) {
 function updatePagination(total, page) {
     const paginationEl = document.getElementById('pagination');
     const totalPages = Math.ceil(total / pageSize);
+    const searchInput = document.getElementById('searchInput');
+    const searchQuery = searchInput ? searchInput.value.trim() : '';
+    const searchParam = searchQuery ? `, '${searchQuery.replace(/'/g, "\\'")}'` : '';
     
     paginationEl.innerHTML = `
-        <button ${page === 0 ? 'disabled' : ''} onclick="loadDocuments('${currentDb}', '${currentCollection}', ${page - 1})">Previous</button>
+        <button ${page === 0 ? 'disabled' : ''} onclick="loadDocuments('${currentDb}', '${currentCollection}', ${page - 1}${searchParam})">Previous</button>
         <span>Page ${page + 1} of ${totalPages} (${total} total)</span>
-        <button ${page >= totalPages - 1 ? 'disabled' : ''} onclick="loadDocuments('${currentDb}', '${currentCollection}', ${page + 1})">Next</button>
+        <button ${page >= totalPages - 1 ? 'disabled' : ''} onclick="loadDocuments('${currentDb}', '${currentCollection}', ${page + 1}${searchParam})">Next</button>
     `;
 }
 

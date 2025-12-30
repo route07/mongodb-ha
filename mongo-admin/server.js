@@ -402,25 +402,104 @@ app.get('/api/databases/:dbName/collections/:collectionName/documents', requireA
     const collection = db.collection(req.params.collectionName);
     const limit = parseInt(req.query.limit) || 100;
     const skip = parseInt(req.query.skip) || 0;
+    const searchQuery = req.query.search || '';
+    
+    // Build query based on search
+    let query = {};
+    if (searchQuery) {
+      query = buildSearchQuery(searchQuery);
+    }
     
     const documents = await collection
-      .find({})
+      .find(query)
       .skip(skip)
       .limit(limit)
       .toArray();
     
-    const count = await collection.countDocuments();
+    const count = await collection.countDocuments(query);
     
     res.json({
       documents,
       total: count,
       limit,
-      skip
+      skip,
+      searchQuery: searchQuery || null
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Helper function to build search query
+function buildSearchQuery(searchText) {
+  if (!searchText || searchText.trim() === '') {
+    return {};
+  }
+  
+  const query = { $or: [] };
+  const searchLower = searchText.toLowerCase();
+  
+  // Check if it's a field:value format
+  if (searchText.includes(':')) {
+    const parts = searchText.split(':');
+    if (parts.length === 2) {
+      const field = parts[0].trim();
+      const value = parts[1].trim();
+      
+      // Try to parse as number
+      const numValue = parseFloat(value);
+      if (!isNaN(numValue) && value === numValue.toString()) {
+        return { [field]: numValue };
+      }
+      
+      // Try to parse as boolean
+      if (value.toLowerCase() === 'true') {
+        return { [field]: true };
+      }
+      if (value.toLowerCase() === 'false') {
+        return { [field]: false };
+      }
+      
+      // Try to parse as ObjectId
+      try {
+        const { ObjectId } = require('mongodb');
+        if (ObjectId.isValid(value)) {
+          return { [field]: new ObjectId(value) };
+        }
+      } catch (e) {
+        // Ignore
+      }
+      
+      // Use regex for text search (case-insensitive)
+      return { [field]: { $regex: value, $options: 'i' } };
+    }
+  }
+  
+  // General text search - search in all string fields
+  // This is a simplified approach - searches in common field names
+  const commonFields = ['name', 'title', 'email', 'username', 'description', 'text', 'content', 'value', 'data'];
+  
+  commonFields.forEach(field => {
+    query.$or.push({ [field]: { $regex: searchText, $options: 'i' } });
+  });
+  
+  // Also search in _id as string
+  try {
+    const { ObjectId } = require('mongodb');
+    if (ObjectId.isValid(searchText)) {
+      query.$or.push({ _id: new ObjectId(searchText) });
+    }
+  } catch (e) {
+    // Ignore
+  }
+  
+  // If no $or conditions, return empty query (no results)
+  if (query.$or.length === 0) {
+    return {};
+  }
+  
+  return query;
+}
 
 // Get document by ID
 app.get('/api/databases/:dbName/collections/:collectionName/documents/:id', requireAuth, async (req, res) => {
