@@ -132,7 +132,8 @@ services:
 
   ## Custom MongoDB Admin UI (with TLS and Replica Set support)
   mongo-admin:
-    build: ./mongo-admin
+    #build: ./mongo-admin
+    image: route07/mongodb-admin:latest
     container_name: mongo-admin
     restart: unless-stopped
     ports:
