@@ -1,0 +1,31 @@
+{
+  "name": "mongodb-ipfs-backup",
+  "version": "1.0.0",
+  "description": "Automated MongoDB backup to IPFS with encryption",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "jest",
+    "restore": "node restore/restore.js"
+  },
+  "keywords": [
+    "mongodb",
+    "backup",
+    "ipfs",
+    "encryption"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "mongodb": "^6.0.0",
+    "ipfs-http-client": "^60.0.0",
+    "node-cron": "^3.0.3",
+    "tar": "^6.2.0",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "commander": "^11.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

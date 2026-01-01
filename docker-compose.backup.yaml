@@ -1,0 +1,69 @@
+# Backup service addition for docker-compose.yaml
+# Add this service to your existing docker-compose.yaml or use:
+# docker-compose -f docker-compose.yaml -f docker-compose.backup.yaml up -d
+
+services:
+  mongodb-backup:
+    build: ./ipfs-backup
+    container_name: mongodb-backup
+    restart: unless-stopped
+    networks:
+      - db-network
+    environment:
+      # MongoDB Connection (connect to secondary)
+      MONGODB_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb-secondary-1:27017/?replicaSet=${REPLICA_SET_NAME:-rs0}&tls=true&tlsCAFile=/etc/mongo/ssl/ca.crt&tlsAllowInvalidCertificates=true&authSource=admin&readPreference=secondary
+      
+      # Encryption (REQUIRED - generate with: openssl rand -base64 32)
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY}
+      ENCRYPTION_KEY_DERIVATION_ITERATIONS: ${ENCRYPTION_KEY_DERIVATION_ITERATIONS:-100000}
+      
+      # IPFS Configuration (REQUIRED)
+      IPFS_NODE_1_URL: ${IPFS_NODE_1_URL}
+      IPFS_NODE_2_URL: ${IPFS_NODE_2_URL}
+      IPFS_REPLICATION_FACTOR: ${IPFS_REPLICATION_FACTOR:-2}
+      
+      # Backup Schedule
+      FULL_BACKUP_SCHEDULE: ${FULL_BACKUP_SCHEDULE:-0 2 * * 0}
+      INCREMENTAL_BACKUP_SCHEDULE: ${INCREMENTAL_BACKUP_SCHEDULE:-0 2 * * *}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-90}
+      
+      # Local Storage
+      BACKUP_LOCAL_RETENTION_DAYS: ${BACKUP_LOCAL_RETENTION_DAYS:-7}
+      BACKUP_TEMP_DIR: /tmp/mongodb-backups
+      BACKUP_STORAGE_DIR: /data/backups
+      
+      # Notifications
+      WEBHOOK_URL: ${WEBHOOK_URL:-}
+      WEBHOOK_ENABLED: ${WEBHOOK_ENABLED:-true}
+      
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_DIR: /var/log/backups
+      
+      # MongoDB Tools
+      MONGODUMP_PATH: mongodump
+      MONGORESTORE_PATH: mongorestore
+    volumes:
+      - ./tls-certs:/etc/mongo/ssl:ro
+      - backup-storage:/data/backups
+      - backup-temp:/tmp/mongodb-backups
+      - backup-logs:/var/log/backups
+    depends_on:
+      mongodb-secondary-1:
+        condition: service_healthy
+      mongodb-secondary-2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  backup-storage:
+    driver: local
+  backup-temp:
+    driver: local
+  backup-logs:
+    driver: local
