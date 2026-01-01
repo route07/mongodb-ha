@@ -25,7 +25,8 @@ Add this to your `.env` file as `BACKUP_ENCRYPTION_KEY`.
 
 ### 2. Configure Environment Variables
 
-Add to your `.env` file:
+**For Docker (Recommended):**
+Add backup configuration to the root `.env` file (same directory as `docker-compose.yaml`):
 
 ```bash
 # Encryption Key (REQUIRED)
@@ -37,7 +38,18 @@ IPFS_NODE_2_URL=http://ipfs-node-2.internal:5001
 
 # Webhook (Optional)
 WEBHOOK_URL=https://your-webhook-url.com/backup-notifications
-WEBHOOK_ENABLED=true
+WEBHOOK_ENABLED=false
+```
+
+Docker Compose will automatically pass these variables to the container.
+
+**For Local Development (outside Docker):**
+Create a `.env` file in the `ipfs-backup/` directory:
+
+```bash
+cd ipfs-backup
+cp .env.example .env
+# Edit .env with your configuration
 ```
 
 ### 3. Start Backup Service

@@ -1,11 +1,11 @@
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs').promises;
 const path = require('path');
 const config = require('../config/load');
 const logger = require('../utils/logger');
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 class MongoDBDump {
   /**
@@ -79,10 +79,12 @@ class MongoDBDump {
         oplog: false,
       });
 
-      const command = `${config.mongodbTools.mongodump} ${args.join(' ')}`;
-      logger.debug('Executing mongodump', { command: command.replace(/:[^:@]+@/, ':****@') });
+      logger.debug('Executing mongodump', { 
+        command: config.mongodbTools.mongodump,
+        args: args.map(a => a === config.mongodb.uri ? a.replace(/:[^:@]+@/, ':****@') : a)
+      });
 
-      const { stdout, stderr } = await execAsync(command, {
+      const { stdout, stderr } = await execFileAsync(config.mongodbTools.mongodump, args, {
         maxBuffer: 10 * 1024 * 1024, // 10MB buffer
       });
 
@@ -129,10 +131,12 @@ class MongoDBDump {
         oplog: true,
       });
 
-      const command = `${config.mongodbTools.mongodump} ${args.join(' ')}`;
-      logger.debug('Executing mongodump with oplog', { command: command.replace(/:[^:@]+@/, ':****@') });
+      logger.debug('Executing mongodump with oplog', { 
+        command: config.mongodbTools.mongodump,
+        args: args.map(a => a === config.mongodb.uri ? a.replace(/:[^:@]+@/, ':****@') : a)
+      });
 
-      const { stdout, stderr } = await execAsync(command, {
+      const { stdout, stderr } = await execFileAsync(config.mongodbTools.mongodump, args, {
         maxBuffer: 10 * 1024 * 1024,
       });
 
