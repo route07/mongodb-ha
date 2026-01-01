@@ -28,7 +28,7 @@ class IPFSUploader {
       });
 
       // Use primary client to add file
-      const primaryClient = ipfsClient.getPrimaryClient();
+      const primaryClient = await ipfsClient.getPrimaryClient();
       
       // Read file
       const fileContent = fs.readFileSync(filePath);
@@ -74,7 +74,7 @@ class IPFSUploader {
    * @returns {Promise<Array>} - Pin results for each node
    */
   async pinBackup(cid) {
-    const clients = ipfsClient.getAllClients();
+    const clients = await ipfsClient.getAllClients();
     const pinResults = [];
 
     logger.debug('Pinning backup on all nodes', { cid, nodeCount: clients.length });
@@ -113,7 +113,7 @@ class IPFSUploader {
    * @returns {Promise<object>} - Verification results
    */
   async verifyPin(cid) {
-    const clients = ipfsClient.getAllClients();
+    const clients = await ipfsClient.getAllClients();
     const results = [];
 
     for (const { client, node, url } of clients) {
@@ -152,7 +152,7 @@ class IPFSUploader {
    * @returns {Promise<Array>} - Unpin results
    */
   async unpinBackup(cid) {
-    const clients = ipfsClient.getAllClients();
+    const clients = await ipfsClient.getAllClients();
     const results = [];
 
     logger.info('Unpinning backup from all nodes', { cid });

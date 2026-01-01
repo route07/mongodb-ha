@@ -1,15 +1,26 @@
-const { create } = require('ipfs-http-client');
 const config = require('../config/load');
 const logger = require('../utils/logger');
 
 class IPFSClient {
   constructor() {
     this.clients = [];
-    this.init();
+    this.ipfsHttpClient = null;
+    this.initialized = false;
+    this.initPromise = null;
   }
 
-  init() {
+  async init() {
+    if (this.initialized) {
+      return;
+    }
+
     try {
+      // Dynamic import for ipfs-http-client (handles both ESM and CommonJS)
+      if (!this.ipfsHttpClient) {
+        this.ipfsHttpClient = await import('ipfs-http-client');
+      }
+      const { create } = this.ipfsHttpClient;
+
       // Create client for each IPFS node
       if (config.ipfs.node1Url) {
         const client1 = create({ url: config.ipfs.node1Url });
@@ -26,6 +37,8 @@ class IPFSClient {
       if (this.clients.length === 0) {
         throw new Error('No IPFS nodes configured');
       }
+
+      this.initialized = true;
     } catch (error) {
       logger.error('Failed to initialize IPFS clients', { error: error.message });
       throw error;
@@ -33,10 +46,31 @@ class IPFSClient {
   }
 
   /**
-   * Get primary client (first node)
-   * @returns {object} - IPFS client
+   * Ensure clients are initialized
+   * @returns {Promise<void>}
    */
-  getPrimaryClient() {
+  async ensureInitialized() {
+    if (this.initialized) {
+      return;
+    }
+    
+    // If initialization is already in progress, wait for it
+    if (this.initPromise) {
+      await this.initPromise;
+      return;
+    }
+    
+    // Start initialization
+    this.initPromise = this.init();
+    await this.initPromise;
+  }
+
+  /**
+   * Get primary client (first node)
+   * @returns {Promise<object>} - IPFS client
+   */
+  async getPrimaryClient() {
+    await this.ensureInitialized();
     if (this.clients.length === 0) {
       throw new Error('No IPFS clients available');
     }
@@ -45,9 +79,10 @@ class IPFSClient {
 
   /**
    * Get all clients
-   * @returns {Array} - Array of IPFS clients
+   * @returns {Promise<Array>} - Array of IPFS clients
    */
-  getAllClients() {
+  async getAllClients() {
+    await this.ensureInitialized();
     return this.clients;
   }
 
@@ -57,6 +92,7 @@ class IPFSClient {
    */
   async checkHealth() {
     try {
+      await this.ensureInitialized();
       const results = await Promise.all(
         this.clients.map(async ({ client, node }) => {
           try {

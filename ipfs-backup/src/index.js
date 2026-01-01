@@ -16,6 +16,10 @@ class BackupService {
       logger.info('=== MongoDB IPFS Backup Service Starting ===');
       logger.info('Configuration', config.getSafeConfig());
 
+      // Initialize IPFS clients
+      logger.info('Initializing IPFS clients...');
+      await ipfsClient.init();
+      
       // Check IPFS connectivity
       logger.info('Checking IPFS connectivity...');
       const ipfsHealthy = await ipfsClient.checkHealth();

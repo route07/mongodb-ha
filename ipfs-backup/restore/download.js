@@ -1,4 +1,3 @@
-const { create } = require('ipfs-http-client');
 const fs = require('fs');
 const path = require('path');
 const config = require('../src/config/load');
@@ -7,6 +6,10 @@ async function downloadBackup(cid, outputPath) {
   console.log(`Downloading backup ${cid}...`);
   
   try {
+    // Dynamic import for ipfs-http-client
+    const ipfsHttpClient = await import('ipfs-http-client');
+    const { create } = ipfsHttpClient;
+    
     // Use first IPFS node
     const ipfs = create({ url: config.ipfs.node1Url });
     
