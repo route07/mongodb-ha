@@ -17,6 +17,7 @@ db_data_secondary*/
 # Node modules (only in subdirectories if used)
 database-export/node_modules/
 mongo-admin/node_modules/
+ipfs-backup/node_modules/
 dumps/
 *.zip
 
