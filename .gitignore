@@ -24,3 +24,5 @@ dumps/
 # Environment files
 .env
 .env.local
+
+agent.sh
