@@ -49,7 +49,7 @@ services:
       - backup-storage:/data/backups
       - backup-temp:/tmp/mongodb-backups
       - backup-logs:/var/log/backups
-      - ~/s3-hel:/mnt/s3-hel:rw  # Mounted S3 storage
+      - ../s3-hel:/mnt/s3-hel:rw  # Mounted S3 storage
     depends_on:
       mongodb-secondary-1:
         condition: service_healthy
