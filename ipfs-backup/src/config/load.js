@@ -39,6 +39,7 @@ class Config {
       tempDir: process.env.BACKUP_TEMP_DIR || '/tmp/mongodb-backups',
       storageDir: process.env.BACKUP_STORAGE_DIR || '/data/backups',
       localRetentionDays: parseInt(process.env.BACKUP_LOCAL_RETENTION_DAYS || '7', 10),
+      s3Path: process.env.BACKUP_S3_PATH || '', // Path to mounted S3 storage (e.g., /mnt/s3-hel)
     };
 
     // Notifications
@@ -79,7 +80,11 @@ class Config {
     }
 
     // Create directories if they don't exist
-    [this.storage.tempDir, this.storage.storageDir, this.logging.dir].forEach(dir => {
+    const dirsToCreate = [this.storage.tempDir, this.storage.storageDir, this.logging.dir];
+    if (this.storage.s3Path) {
+      dirsToCreate.push(this.storage.s3Path);
+    }
+    dirsToCreate.forEach(dir => {
       if (dir && !fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }

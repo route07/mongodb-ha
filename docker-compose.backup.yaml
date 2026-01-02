@@ -31,6 +31,7 @@ services:
       BACKUP_LOCAL_RETENTION_DAYS: ${BACKUP_LOCAL_RETENTION_DAYS:-7}
       BACKUP_TEMP_DIR: /tmp/mongodb-backups
       BACKUP_STORAGE_DIR: /data/backups
+      BACKUP_S3_PATH: ${BACKUP_S3_PATH:-/mnt/s3-hel}  # Path to mounted S3 storage
       
       # Notifications
       WEBHOOK_URL: ${WEBHOOK_URL:-}
@@ -48,6 +49,7 @@ services:
       - backup-storage:/data/backups
       - backup-temp:/tmp/mongodb-backups
       - backup-logs:/var/log/backups
+      - ~/s3-hel:/mnt/s3-hel:rw  # Mounted S3 storage
     depends_on:
       mongodb-secondary-1:
         condition: service_healthy

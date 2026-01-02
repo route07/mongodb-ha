@@ -29,16 +29,16 @@ class BackupOrchestrator {
       await fs.mkdir(tempBackupDir, { recursive: true });
 
       // 2. Create MongoDB dump
-      logger.info('Step 1/6: Creating MongoDB dump');
+      logger.info('Step 1/7: Creating MongoDB dump');
       const dumpResult = await mongodbDump.createFullBackup(tempBackupDir);
 
       // 3. Compress backup
-      logger.info('Step 2/6: Compressing backup');
+      logger.info('Step 2/7: Compressing backup');
       compressedFile = path.join(config.storage.tempDir, `full_backup_${timestamp}.tar.gz`);
       await compression.compressDirectory(tempBackupDir, compressedFile);
 
       // 4. Encrypt backup
-      logger.info('Step 3/6: Encrypting backup');
+      logger.info('Step 3/7: Encrypting backup');
       encryptedFile = path.join(config.storage.storageDir, `full_backup_${timestamp}.tar.gz.enc`);
       await encryption.encryptFileStream(compressedFile, encryptedFile);
 
@@ -48,12 +48,18 @@ class BackupOrchestrator {
         sizeMB: (encryptedStats.size / 1024 / 1024).toFixed(2),
       });
 
+      // 4b. Copy to S3 storage (if configured)
+      if (config.storage.s3Path) {
+        logger.info('Step 4/7: Copying backup to S3 storage');
+        await this.copyToS3(encryptedFile, `full_backup_${timestamp}.tar.gz.enc`);
+      }
+
       // 5. Upload to IPFS
-      logger.info('Step 4/6: Uploading to IPFS');
+      logger.info('Step 5/7: Uploading to IPFS');
       const uploadResult = await ipfsUploader.uploadFile(encryptedFile);
 
       // 6. Add to manifest
-      logger.info('Step 5/6: Updating manifest');
+      logger.info('Step 6/7: Updating manifest');
       await manifestManager.addBackup({
         type: 'full',
         cid: uploadResult.cid,
@@ -65,7 +71,7 @@ class BackupOrchestrator {
       });
 
       // 7. Upload manifest to IPFS
-      logger.info('Step 6/6: Uploading manifest to IPFS');
+      logger.info('Step 7/7: Uploading manifest to IPFS');
       await manifestManager.uploadManifest();
 
       const totalDuration = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -134,16 +140,16 @@ class BackupOrchestrator {
       await fs.mkdir(tempBackupDir, { recursive: true });
 
       // 2. Create MongoDB oplog dump
-      logger.info('Step 1/6: Creating MongoDB oplog dump');
+      logger.info('Step 1/7: Creating MongoDB oplog dump');
       const dumpResult = await mongodbDump.createIncrementalBackup(tempBackupDir, lastBackupTime);
 
       // 3. Compress backup
-      logger.info('Step 2/6: Compressing backup');
+      logger.info('Step 2/7: Compressing backup');
       compressedFile = path.join(config.storage.tempDir, `incremental_backup_${timestamp}.tar.gz`);
       await compression.compressDirectory(tempBackupDir, compressedFile);
 
       // 4. Encrypt backup
-      logger.info('Step 3/6: Encrypting backup');
+      logger.info('Step 3/7: Encrypting backup');
       encryptedFile = path.join(config.storage.storageDir, `incremental_backup_${timestamp}.tar.gz.enc`);
       await encryption.encryptFileStream(compressedFile, encryptedFile);
 
@@ -153,12 +159,18 @@ class BackupOrchestrator {
         sizeMB: (encryptedStats.size / 1024 / 1024).toFixed(2),
       });
 
+      // 4b. Copy to S3 storage (if configured)
+      if (config.storage.s3Path) {
+        logger.info('Step 4/7: Copying backup to S3 storage');
+        await this.copyToS3(encryptedFile, `incremental_backup_${timestamp}.tar.gz.enc`);
+      }
+
       // 5. Upload to IPFS
-      logger.info('Step 4/6: Uploading to IPFS');
+      logger.info('Step 5/7: Uploading to IPFS');
       const uploadResult = await ipfsUploader.uploadFile(encryptedFile);
 
       // 6. Add to manifest
-      logger.info('Step 5/6: Updating manifest');
+      logger.info('Step 6/7: Updating manifest');
       await manifestManager.addBackup({
         type: 'incremental',
         cid: uploadResult.cid,
@@ -172,7 +184,7 @@ class BackupOrchestrator {
       });
 
       // 7. Upload manifest to IPFS
-      logger.info('Step 6/6: Uploading manifest to IPFS');
+      logger.info('Step 7/7: Uploading manifest to IPFS');
       await manifestManager.uploadManifest();
 
       const totalDuration = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -211,6 +223,42 @@ class BackupOrchestrator {
       await this.cleanupTempFiles([tempBackupDir, compressedFile, encryptedFile]);
 
       throw error;
+    }
+  }
+
+  /**
+   * Copy backup file to S3 storage
+   * @param {string} sourceFile - Path to encrypted backup file
+   * @param {string} filename - Filename to use in S3 storage
+   */
+  async copyToS3(sourceFile, filename) {
+    try {
+      const s3Path = config.storage.s3Path;
+      if (!s3Path) {
+        logger.debug('S3 path not configured, skipping S3 copy');
+        return;
+      }
+
+      // Ensure S3 directory exists
+      await fs.mkdir(s3Path, { recursive: true });
+
+      // Copy file to S3 storage
+      const destPath = path.join(s3Path, filename);
+      await fs.copyFile(sourceFile, destPath);
+
+      const stats = await fs.stat(destPath);
+      logger.info('Backup copied to S3 storage', {
+        s3Path: destPath,
+        size: stats.size,
+        sizeMB: (stats.size / 1024 / 1024).toFixed(2),
+      });
+    } catch (error) {
+      // Log error but don't fail the backup
+      logger.error('Failed to copy backup to S3 storage', {
+        error: error.message,
+        s3Path: config.storage.s3Path,
+      });
+      // Don't throw - S3 copy is optional
     }
   }
 
