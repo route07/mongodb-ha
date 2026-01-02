@@ -50,7 +50,9 @@ services:
       - backup-storage:/data/backups
       - backup-temp:/tmp/mongodb-backups
       - backup-logs:/var/log/backups
-      - ${BACKUP_S3_HOST_PATH:-/home/tschain/s3-hel}:/mnt/s3-hel:rw  # Mounted S3 storage (use absolute path)
+      # S3 storage mount - directory must exist on host (it's a mounted S3 drive)
+      # Using absolute path from environment variable
+      - "${BACKUP_S3_HOST_PATH:-/home/tschain/s3-hel}:/mnt/s3-hel:rw"
     depends_on:
       mongodb-secondary-1:
         condition: service_healthy
