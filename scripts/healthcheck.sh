@@ -7,10 +7,8 @@ if ! pgrep -x mongod > /dev/null; then
   exit 1
 fi
 
-# Try to connect with mongosh using TLS
-mongosh --tls \
-  --tlsAllowInvalidCertificates \
-  --tlsCAFile /etc/mongo/ssl/ca.crt \
+# Try to connect with mongosh (no TLS)
+mongosh \
   -u "${MONGO_INITDB_ROOT_USERNAME}" \
   -p "${MONGO_INITDB_ROOT_PASSWORD}" \
   --authenticationDatabase admin \

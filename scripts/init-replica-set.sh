@@ -22,9 +22,7 @@ wait_for_mongo() {
   local attempt=0
   
   while [ $attempt -lt $max_attempts ]; do
-    if mongosh --tls \
-      --tlsAllowInvalidCertificates \
-      --tlsCAFile /etc/mongo/ssl/ca.crt \
+    if mongosh \
       -u "$MONGO_USERNAME" \
       -p "$MONGO_PASSWORD" \
       --authenticationDatabase admin \
@@ -51,9 +49,7 @@ wait_for_mongo "$SECONDARY2_HOST"
 echo "All MongoDB nodes are ready. Initializing replica set..."
 
 # Check if replica set is already initialized
-RS_STATUS=$(mongosh --tls \
-  --tlsAllowInvalidCertificates \
-  --tlsCAFile /etc/mongo/ssl/ca.crt \
+RS_STATUS=$(mongosh \
   -u "$MONGO_USERNAME" \
   -p "$MONGO_PASSWORD" \
   --authenticationDatabase admin \
@@ -64,9 +60,7 @@ RS_STATUS=$(mongosh --tls \
 if [ "$RS_STATUS" = "1" ]; then
   echo "Replica set '$REPLICA_SET_NAME' is already initialized."
   echo "Current status:"
-  mongosh --tls \
-    --tlsAllowInvalidCertificates \
-    --tlsCAFile /etc/mongo/ssl/ca.crt \
+  mongosh \
     -u "$MONGO_USERNAME" \
     -p "$MONGO_PASSWORD" \
     --authenticationDatabase admin \
@@ -79,9 +73,7 @@ fi
 # Initialize replica set
 echo "Initializing replica set '$REPLICA_SET_NAME'..."
 
-mongosh --tls \
-  --tlsAllowInvalidCertificates \
-  --tlsCAFile /etc/mongo/ssl/ca.crt \
+mongosh \
   -u "$MONGO_USERNAME" \
   -p "$MONGO_PASSWORD" \
   --authenticationDatabase admin \
@@ -106,9 +98,7 @@ echo "Waiting for primary election..."
 max_attempts=30
 attempt=0
 while [ $attempt -lt $max_attempts ]; do
-  PRIMARY_STATE=$(mongosh --tls \
-    --tlsAllowInvalidCertificates \
-    --tlsCAFile /etc/mongo/ssl/ca.crt \
+  PRIMARY_STATE=$(mongosh \
     -u "$MONGO_USERNAME" \
     -p "$MONGO_PASSWORD" \
     --authenticationDatabase admin \
@@ -128,9 +118,7 @@ done
 echo ""
 echo "Replica Set Status:"
 echo "==================="
-mongosh --tls \
-  --tlsAllowInvalidCertificates \
-  --tlsCAFile /etc/mongo/ssl/ca.crt \
+mongosh \
   -u "$MONGO_USERNAME" \
   -p "$MONGO_PASSWORD" \
   --authenticationDatabase admin \

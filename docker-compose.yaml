@@ -21,10 +21,6 @@ services:
       mongod
       --replSet ${REPLICA_SET_NAME:-rs0}
       --keyFile /etc/mongo/ssl/keyfile
-      --tlsMode requireTLS
-      --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
-      --tlsCAFile /etc/mongo/ssl/ca.crt
-      --tlsAllowConnectionsWithoutCertificates
       --bind_ip_all
     networks:
       - db-network
@@ -54,10 +50,6 @@ services:
       mongod
       --replSet ${REPLICA_SET_NAME:-rs0}
       --keyFile /etc/mongo/ssl/keyfile
-      --tlsMode requireTLS
-      --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
-      --tlsCAFile /etc/mongo/ssl/ca.crt
-      --tlsAllowConnectionsWithoutCertificates
       --bind_ip_all
     networks:
       - db-network
@@ -90,10 +82,6 @@ services:
       mongod
       --replSet ${REPLICA_SET_NAME:-rs0}
       --keyFile /etc/mongo/ssl/keyfile
-      --tlsMode requireTLS
-      --tlsCertificateKeyFile /etc/mongo/ssl/server.pem
-      --tlsCAFile /etc/mongo/ssl/ca.crt
-      --tlsAllowConnectionsWithoutCertificates
       --bind_ip_all
     networks:
       - db-network
@@ -146,10 +134,7 @@ services:
       MONGO_SECONDARY1_PORT: ${MONGO_SECONDARY1_PORT:-27018}
       MONGO_SECONDARY2_PORT: ${MONGO_SECONDARY2_PORT:-27019}
       MONGO_REPLICA_SET: ${REPLICA_SET_NAME:-rs0}
-      MONGO_TLS: "true"
-      MONGO_TLS_ALLOW_INVALID: "true"
-      MONGO_TLS_CA_FILE: /etc/mongo/ssl/ca.crt
-      MONGO_TLS_CLIENT_CERT_FILE: /etc/mongo/ssl/client.pem
+      MONGO_TLS: "false"
       ADMIN_UI_PORT: 3000
       WEB3_AUTH_ENABLED: ${WEB3_AUTH_ENABLED:-false}
       ADMIN_WALLETS: ${ADMIN_WALLETS:-}
